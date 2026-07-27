@@ -1,8 +1,13 @@
 from typing import AsyncGenerator
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
 from core.config import settings
 from core.logger import logger
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 def _build_engine():
@@ -15,7 +20,7 @@ def _build_engine():
         connect_args["ssl"] = sslmode[0]
 
     clean_url = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
-    return create_async_engine(clean_url, echo=True, pool_pre_ping=True, connect_args=connect_args)
+    return create_async_engine(clean_url, echo=False, pool_pre_ping=True, connect_args=connect_args)
 
 
 engine = _build_engine()

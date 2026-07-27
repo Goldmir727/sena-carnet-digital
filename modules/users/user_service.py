@@ -1,24 +1,55 @@
 from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from modules.users.user_schema import UserCreate
+from modules.users.user_schema import UserCreate, UserUpdate
 from core.security import hash_password
 from core.logger import logger
-from modules.users.user_schema import UserUpdate
+
 
 class UserService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get_all_users(self) -> list[dict]:
-        logger.info("SQL Nativo: Consultando todos los usuarios.")
-        query = text("SELECT id, username, email, is_active, role_id FROM users ORDER BY id ASC;")
+        logger.info("Consultando todos los usuarios.")
+        query = text("""
+            SELECT id, username, email, nombres, apellidos, tipo_documento,
+                   numero_documento, foto_perfil, is_active, role_id
+            FROM users ORDER BY id ASC;
+        """)
         result = await self.db.execute(query)
         return [dict(row) for row in result.mappings().all()]
 
+    async def get_user_by_id(self, user_id: int) -> dict:
+        logger.info(f"Consultando usuario ID: {user_id}")
+        query = text("""
+            SELECT id, username, email, nombres, apellidos, tipo_documento,
+                   numero_documento, foto_perfil, is_active, role_id
+            FROM users WHERE id = :id;
+        """)
+        result = await self.db.execute(query, {"id": user_id})
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+        return dict(row)
+
+    async def search_users(self, term: str) -> list[dict]:
+        logger.info(f"Buscando usuarios con: {term}")
+        query = text("""
+            SELECT id, username, email, nombres, apellidos, tipo_documento,
+                   numero_documento, is_active, role_id
+            FROM users
+            WHERE username ILIKE :term OR email ILIKE :term
+               OR numero_documento ILIKE :term OR nombres ILIKE :term
+               OR apellidos ILIKE :term
+            ORDER BY id ASC;
+        """)
+        result = await self.db.execute(query, {"term": f"%{term}%"})
+        return [dict(row) for row in result.mappings().all()]
+
     async def create_user(self, user_data: UserCreate) -> dict:
-        logger.info(f"SQL Nativo: Registrando usuario {user_data.username}")
-        
+        logger.info(f"Registrando usuario {user_data.username}")
+
         dup = await self.db.execute(
             text("SELECT id FROM users WHERE username = :username OR email = :email;"),
             {"username": user_data.username, "email": user_data.email}
@@ -26,19 +57,40 @@ class UserService:
         if dup.first():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario o correo ya existen.")
 
-        role_check = await self.db.execute(text("SELECT id FROM roles WHERE id = :role_id;"), {"role_id": user_data.role_id})
+        if user_data.numero_documento:
+            dup_doc = await self.db.execute(
+                text("SELECT id FROM users WHERE numero_documento = :doc;"),
+                {"doc": user_data.numero_documento}
+            )
+            if dup_doc.first():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El número de documento ya está registrado.")
+
+        role_check = await self.db.execute(
+            text("SELECT id FROM roles WHERE id = :role_id;"),
+            {"role_id": user_data.role_id}
+        )
         if not role_check.first():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El role_id proveído no existe.")
 
-        # Uso de la función bcrypt nativa
         hashed_pwd = hash_password(user_data.password)
-        
-        query = text("INSERT INTO users (username, email, hashed_password, is_active, role_id) VALUES (:username, :email, :hashed_password, TRUE, :role_id) RETURNING id, username, email, is_active, role_id;")
+
+        query = text("""
+            INSERT INTO users (username, email, hashed_password, nombres, apellidos,
+                               tipo_documento, numero_documento, is_active, role_id)
+            VALUES (:username, :email, :hashed_password, :nombres, :apellidos,
+                    :tipo_documento, :numero_documento, TRUE, :role_id)
+            RETURNING id, username, email, nombres, apellidos, tipo_documento,
+                      numero_documento, is_active, role_id;
+        """)
         try:
             result = await self.db.execute(query, {
                 "username": user_data.username,
                 "email": user_data.email,
                 "hashed_password": hashed_pwd,
+                "nombres": user_data.nombres,
+                "apellidos": user_data.apellidos,
+                "tipo_documento": user_data.tipo_documento,
+                "numero_documento": user_data.numero_documento,
                 "role_id": user_data.role_id
             })
             await self.db.commit()
@@ -72,15 +124,33 @@ class UserService:
         update_fields = []
         params = {"id": target_user_id}
 
-        if user_update.email is not None:
-            dup_email = await self.db.execute(
-                text("SELECT id FROM users WHERE email = :email AND id != :id;"),
-                {"email": user_update.email, "id": target_user_id}
-            )
-            if dup_email.first():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El correo ya está registrado.")
-            update_fields.append("email = :email" )
-            params["email"] = user_update.email
+        field_map = {
+            "email": "email",
+            "nombres": "nombres",
+            "apellidos": "apellidos",
+            "tipo_documento": "tipo_documento",
+            "numero_documento": "numero_documento",
+        }
+
+        for attr, col in field_map.items():
+            value = getattr(user_update, attr, None)
+            if value is not None:
+                if attr == "email":
+                    dup = await self.db.execute(
+                        text("SELECT id FROM users WHERE email = :email AND id != :id;"),
+                        {"email": value, "id": target_user_id}
+                    )
+                    if dup.first():
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El correo ya está registrado.")
+                if attr == "numero_documento":
+                    dup = await self.db.execute(
+                        text("SELECT id FROM users WHERE numero_documento = :doc AND id != :id;"),
+                        {"doc": value, "id": target_user_id}
+                    )
+                    if dup.first():
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El documento ya está registrado.")
+                update_fields.append(f"{col} = :{col}")
+                params[col] = value
 
         if user_update.password is not None:
             update_fields.append("hashed_password = :hashed_password")
@@ -104,7 +174,8 @@ class UserService:
             UPDATE users
             SET {', '.join(update_fields)}
             WHERE id = :id
-            RETURNING id, username, email, is_active, role_id;
+            RETURNING id, username, email, nombres, apellidos, tipo_documento,
+                      numero_documento, foto_perfil, is_active, role_id;
         """
 
         try:
@@ -115,3 +186,26 @@ class UserService:
             await self.db.rollback()
             logger.error(f"Error crítico en actualización SQL: {str(e)}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al procesar los datos.")
+
+    async def soft_delete_user(self, user_id: int) -> dict:
+        logger.info(f"Desactivando lógicamente usuario ID: {user_id}")
+        result = await self.db.execute(
+            text("UPDATE users SET is_active = FALSE WHERE id = :id RETURNING id, username, email, is_active;"),
+            {"id": user_id}
+        )
+        await self.db.commit()
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+        return dict(row)
+
+    async def update_foto(self, user_id: int, foto_path: str) -> dict:
+        result = await self.db.execute(
+            text("UPDATE users SET foto_perfil = :foto WHERE id = :id RETURNING id, username, foto_perfil;"),
+            {"foto": foto_path, "id": user_id}
+        )
+        await self.db.commit()
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+        return dict(row)

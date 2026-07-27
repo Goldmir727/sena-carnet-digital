@@ -1,5 +1,6 @@
 import bcrypt
 import jwt
+import uuid
 from datetime import datetime, timedelta, timezone
 from core.config import settings
 from fastapi import Depends, HTTPException, status
@@ -26,8 +27,39 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_refresh_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh", "jti": str(uuid.uuid4())})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_reset_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "reset", "jti": str(uuid.uuid4())})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expirado.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def get_current_user(
@@ -40,14 +72,14 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        user_id: int = payload.get("user_id")
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise credentials_exception
 
-        if username is None or user_id is None:
-            raise credentials_exception
-    except jwt.PyJWTError:
+    username: str = payload.get("sub")
+    user_id: int = payload.get("user_id")
+
+    if username is None or user_id is None:
         raise credentials_exception
 
     query = text("""
@@ -67,3 +99,21 @@ async def get_current_user(
         )
 
     return dict(user_row)
+
+
+async def get_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] != "Administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Administrador."
+        )
+    return current_user
+
+
+async def get_validator_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] not in ("Administrador", "Validador"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Validador o Administrador."
+        )
+    return current_user

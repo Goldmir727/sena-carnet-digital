@@ -1,4 +1,11 @@
 .env
-_pycache_/
+__pycache__/
 *.py[cod]
 *$py.class
+venv/
+uploads/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.pyc
