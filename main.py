@@ -27,7 +27,8 @@ app = FastAPI(
     title="Sistema de Gestión de Carnets Digitales",
     version="4.0.0",
     description="API modular para emisión, validación y trazabilidad de carnets institucionales",
-    lifespan=lifespan
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True},
 )
 
 app.add_middleware(

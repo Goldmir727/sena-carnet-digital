@@ -11,7 +11,7 @@ from core.config import settings
 from core.logger import logger
 from core.rate_limit import rate_limiter, get_client_ip
 from core.exceptions import AccountBlockedError
-from services.email_service import send_verification_code
+from services.email_service import send_verification_code, send_security_alert, send_email
 
 
 class AuthService:
@@ -264,36 +264,68 @@ class AuthService:
         })
 
         return {"access_token": new_access, "token_type": "bearer"}
+    
 
     async def forgot_password(self, email: str) -> dict:
-        query = text("SELECT id, email FROM users WHERE email = :email;")
+        query = text("""
+            SELECT id, email, username
+            FROM users
+            WHERE email = :email;
+        """)
         result = await self.db.execute(query, {"email": email})
         user = result.mappings().first()
         if not user:
-            return {"message": "Si el correo existe, recibirá instrucciones para restablecer su contraseña."}
+            return {"message": "Si el correo existe, recibira instrucciones para restablecer su contrasena."}
 
         reset_token = create_reset_token(data={"sub": email, "user_id": user["id"]})
-        logger.info(f"Token de reseteo generado para {email}: {reset_token}")
-        return {"reset_token": reset_token, "message": "Revise su correo para restablecer la contraseña."}
+
+        subject = "Recuperacion de contrasena"
+        body = (
+            f"Hola {user['username']},\n\n"
+            f"Se solicito restablecer tu contrasena.\n\n"
+            f"Copia el siguiente token completo:\n\n"
+            f"------------------------------\n"
+            f"{reset_token}\n"
+            f"------------------------------\n\n"
+            f"Este token expira en {settings.RESET_TOKEN_EXPIRE_MINUTES} minutos.\n\n"
+            f"Luego utiliza el endpoint /auth/reset-password para cambiar tu contrasena.\n\n"
+            f"Sistema de Gestion de Carnets."
+        )
+
+        enviado = await send_email(to=email, subject=subject, body=body)
+        if not enviado:
+            raise HTTPException(status_code=500, detail="No fue posible enviar el correo.")
+
+        return {"message": "Si el correo existe, recibira instrucciones para restablecer su contrasena."}
 
     async def reset_password(self, token: str, new_password: str) -> dict:
+        token = token.replace(" ", "").replace("\n", "").replace("\r", "")
+
         payload = decode_token(token)
         if payload.get("type") != "reset":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Token de reseteo inválido."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalido.")
 
         email = payload.get("sub")
-        hashed = hash_password(new_password)
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token sin informacion del usuario.")
 
-        await self.db.execute(
+        query = text("SELECT id FROM users WHERE email = :email;")
+        result = await self.db.execute(query, {"email": email})
+        user = result.first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+
+        hashed = hash_password(new_password)
+        update = await self.db.execute(
             text("UPDATE users SET hashed_password = :pwd WHERE email = :email;"),
             {"pwd": hashed, "email": email}
         )
         await self.db.commit()
 
-        return {"message": "Contraseña restablecida exitosamente."}
+        if update.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se pudo actualizar la contrasena.")
+
+        return {"message": "Contrasena restablecida exitosamente."}
 
     async def _register_failed_attempt(self, user_id: int) -> None:
         await self.db.execute(
@@ -304,11 +336,18 @@ class AuthService:
 
     async def _block_account(self, user_id: int) -> None:
         block_until = datetime.now(timezone.utc) + timedelta(minutes=settings.BLOCK_DURATION_MINUTES)
+
         await self.db.execute(
             text("UPDATE users SET bloqueado_hasta = :block_until WHERE id = :id;"),
             {"id": user_id, "block_until": block_until}
         )
         await self.db.commit()
+
+        user_query = text("SELECT email, username FROM users WHERE id = :id;")
+        result = await self.db.execute(user_query, {"id": user_id})
+        user = result.mappings().first()
+        if user:
+            await send_security_alert(user["email"], user["username"])
 
     async def _reset_failed_attempts(self, user_id: int) -> None:
         await self.db.execute(

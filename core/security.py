@@ -4,13 +4,16 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from core.config import settings
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="Pega el access_token obtenido de POST /auth/verify-2fa (sin la palabra Bearer)",
+)
 
 
 def hash_password(password: str) -> str:
@@ -91,7 +94,7 @@ def decode_token(token: str) -> dict:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> dict:
     credentials_exception = HTTPException(
@@ -100,7 +103,10 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = decode_token(token)
+    if credentials is None:
+        raise credentials_exception
+
+    payload = decode_token(credentials.credentials)
     if payload.get("type") != "access":
         raise credentials_exception
 

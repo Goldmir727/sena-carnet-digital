@@ -49,9 +49,8 @@ async def run():
         print("  TEST 2FA")
         print(SEP)
 
-        smtp_ok = bool(settings.MAILTRAP_API_KEY and settings.MAILTRAP_SENDER_EMAIL)
-        print(f"\n  Mailtrap: {'CONFIGURADO (correo real)' if smtp_ok else 'NO CONFIGURADO (simulado)'}")
-        print(f"  API Key: {'***' + settings.MAILTRAP_API_KEY[-4:] if settings.MAILTRAP_API_KEY else '(vacio)'}")
+        smtp_ok = bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
+        print(f"\n  SMTP: {'CONFIGURADO (correo real)' if smtp_ok else 'NO CONFIGURADO (simulado)'}")
         if not smtp_ok:
             print("  Para probar envio real: python test_email.py")
             print("  El codigo se leera directamente de la BD.")

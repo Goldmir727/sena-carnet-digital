@@ -1,19 +1,12 @@
 """
-Test de envio de correo electronico con Mailtrap.
+Test de envio de correo electronico via SMTP Gmail.
 
 Requisito previo:
-    Agrega al .env:
-        MAILTRAP_API_KEY=tu_api_key
-        MAILTRAP_SENDER_EMAIL=hello@demomailtrap.co
-        MAILTRAP_SENDER_NAME=Sistema de Gestion de Carnets
-
-    IMPORTANTE: Con el dominio demo (demomailtrap.co) solo puedes
-    enviar correos a tu propio email de Mailtrap.
-    Para enviar a cualquier destinatario necesitas un dominio verificado.
+    .env debe tener SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 
 Uso:
     python test_email.py                     # test con admin@test.com
-    python test_email.py TU_CORREO@gmail.com # test con tu correo real
+    python test_email.py TU_CORREO@gmail.com # test con un correo especifico
 """
 
 import asyncio
@@ -32,32 +25,31 @@ def info(s): return f"[*] {s}"
 
 async def test_email(to_email: str):
     print(f"\n{SEP}")
-    print("  TEST DE ENVIO DE CORREO (Mailtrap)")
+    print("  TEST DE ENVIO DE CORREO (SMTP)")
     print(SEP)
 
-    configured = bool(settings.MAILTRAP_API_KEY and settings.MAILTRAP_SENDER_EMAIL)
+    configured = bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
 
-    print(f"\n  Configuracion Mailtrap:")
-    if settings.MAILTRAP_API_KEY:
-        print(f"    API_KEY:      ***{settings.MAILTRAP_API_KEY[-4:]}")
-    else:
-        print(f"    API_KEY:      (vacio)")
-    print(f"    SENDER_EMAIL: {settings.MAILTRAP_SENDER_EMAIL or '(vacio)'}")
-    print(f"    SENDER_NAME:  {settings.MAILTRAP_SENDER_NAME}")
-    print(f"    Destinatario: {to_email}")
+    print(f"\n  Configuracion SMTP:")
+    print(f"    SMTP_HOST:     {settings.SMTP_HOST or '(vacio)'}")
+    print(f"    SMTP_PORT:     {settings.SMTP_PORT}")
+    print(f"    SMTP_USER:     {settings.SMTP_USER or '(vacio)'}")
+    print(f"    SMTP_PASSWORD: {'***' if settings.SMTP_PASSWORD else '(vacio)'}")
+    print(f"    SMTP_FROM:     {settings.SMTP_FROM}")
+    print(f"    Destinatario:  {to_email}")
 
     if not configured:
         print(f"\n  {SEP}")
-        print("  MAILTRAP NO CONFIGURADO - MODO SIMULACION")
+        print("  SMTP NO CONFIGURADO - MODO SIMULACION")
         print(f"  {SEP}")
-        print(f"\n  Para enviar correos reales:")
-        print(f"    1. Crea cuenta en https://mailtrap.io")
-        print(f"    2. Ve a Settings -> API Tokens, copia tu API Key")
-        print(f"    3. Agrega al .env:")
-        print(f"         MAILTRAP_API_KEY=tu_api_key")
-        print(f"         MAILTRAP_SENDER_EMAIL=hello@demomailtrap.co")
-        print(f"    4. Reinicia el servidor")
-        print(f"\n  Mientras, el envio se SIMULA en logs.")
+        print(f"\n  Para enviar correos reales con Gmail:")
+        print(f"    1. Activa 2FA en tu cuenta Gmail")
+        print(f"    2. Ve a: https://myaccount.google.com/apppasswords")
+        print(f"    3. Genera un App Password (16 caracteres)")
+        print(f"    4. Agrega al .env:")
+        print(f"         SMTP_USER=tu_correo@gmail.com")
+        print(f"         SMTP_PASSWORD=el_app_password_generado")
+        print(f"    5. Reinicia el servidor")
         print()
 
         result = await send_verification_code(to_email, "Usuario", "482917")
@@ -65,10 +57,9 @@ async def test_email(to_email: str):
             print(ok("Simulacion OK. El codigo aparece en los logs del servidor."))
         else:
             print(fail("Fallo la simulacion"))
-
     else:
         print(f"\n{SEP}")
-        print("  MAILTRAP CONFIGURADO - enviando correos...")
+        print("  SMTP CONFIGURADO - enviando correos reales...")
         print(SEP)
 
         print(f"\n  1. Codigo de verificacion a: {to_email}")
@@ -76,25 +67,21 @@ async def test_email(to_email: str):
         if result:
             print(ok("Enviado. Revisa tu bandeja de entrada (y spam)."))
         else:
-            print(fail(f"No se pudo enviar a {to_email}"))
-            print(info("Si ves 'Demo domains can only be used...' significa que"))
-            print(info("necesitas usar tu propio email como destinatario:"))
-            print(f"       python test_email.py TU_CORREO@gmail.com")
-            print(info("O verifica un dominio propio en Mailtrap para enviar a cualquiera."))
+            print(fail(f"Error al enviar a {to_email}"))
+            print(info("Revisa que SMTP_USER y SMTP_PASSWORD sean correctos"))
+            print(info("y que estes usando un App Password de Gmail."))
 
         print(f"\n  2. Alerta de seguridad...")
         await send_security_alert(to_email, "Usuario")
-        print(ok("Procesado (verifica en dashboard Mailtrap)."))
+        print(ok("Procesado."))
 
         print(f"\n  3. Correo simple...")
         result = await send_email(to_email, "Correo de prueba",
-                                  "Este es un mensaje de prueba desde Mailtrap API.")
+                                  "Este es un mensaje de prueba desde SMTP Gmail.")
         if result:
-            print(ok("Procesado."))
+            print(ok("Enviado."))
         else:
             print(fail("Fallo."))
-
-        print(f"\n  Dashboard: https://mailtrap.io/email-log")
 
     print(f"\n{SEP}")
     print()

@@ -1,7 +1,8 @@
 import asyncio
 import re
-
-import mailtrap as mt
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from core.config import settings
 from core.logger import logger
@@ -12,35 +13,41 @@ async def send_email(
     subject: str,
     text_body: str = "",
     html_body: str = "",
+    body: str = "",
 ) -> bool:
-    if not settings.MAILTRAP_API_KEY:
-        logger.warning(f"Mailtrap no configurado. Simulando envio a {to}: {subject}")
-        _log_simulated_code(subject, text_body or html_body)
+    body_text = body or text_body
+    body_html = html_body or body
+    if not settings.SMTP_HOST or not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+        logger.warning(f"SMTP no configurado. Simulando envio a {to}: {subject}")
+        _log_simulated_code(subject, body_text or body_html)
         return True
-
-    sender_email = settings.MAILTRAP_SENDER_EMAIL
-    if not sender_email:
-        logger.error("MAILTRAP_SENDER_EMAIL no configurado en .env")
-        return False
 
     try:
-        kwargs = {
-            "sender": mt.Address(email=sender_email, name=settings.MAILTRAP_SENDER_NAME),
-            "to": [mt.Address(email=to)],
-            "subject": subject,
-            "text": text_body,
-        }
-        if html_body:
-            kwargs["html"] = html_body
+        print("###################################")
+        print(f"ENTRE A send_email: {to} - {subject}")
+        print("###################################")
 
-        mail = mt.Mail(**kwargs)
-        client = mt.MailtrapClient(token=settings.MAILTRAP_API_KEY)
-        response = await asyncio.to_thread(client.send, mail)
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.SMTP_FROM
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        if body_html:
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
 
-        logger.info(f"Correo enviado a {to} via Mailtrap: message_id={response}")
+        def _send():
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.SMTP_FROM, to, msg.as_string())
+                logger.info("Correo enviado correctamente")
+
+        await asyncio.to_thread(_send)
+        logger.info(f"Correo enviado a {to} via SMTP ({settings.SMTP_HOST})")
         return True
     except Exception as e:
-        logger.error(f"Error al enviar correo via Mailtrap a {to}: {str(e)}")
+        print(f"ERROR AL ENVIAR CORREO: {repr(e)}")
+        logger.error(f"Error SMTP a {to}: {str(e)}")
         return False
 
 
@@ -52,20 +59,21 @@ def _log_simulated_code(subject: str, body: str) -> None:
 
 
 SENA_GREEN = "#39A900"
-FOOTER = (
-    f'<div style="margin-top:30px;padding-top:15px;border-top:1px solid #ddd;'
-    f'font-size:12px;color:#999;text-align:center;">'
-    f'SENA - Servicio Nacional de Aprendizaje<br>'
-    f'Sistema de Gestion de Carnets Digitales<br>'
-    f'Este es un correo automatico. No responda a este mensaje.'
-    f'</div>'
-)
 
 HEADER = (
     f'<div style="background-color:{SENA_GREEN};padding:20px;text-align:center;border-radius:8px 8px 0 0;">'
     f'<h1 style="color:#fff;margin:0;font-size:22px;font-family:Arial,sans-serif;">SENA</h1>'
     f'<p style="color:#e8f5e0;margin:5px 0 0;font-size:13px;font-family:Arial,sans-serif;">'
     f'Sistema de Gestion de Carnets Digitales</p>'
+    f'</div>'
+)
+
+FOOTER = (
+    f'<div style="margin-top:30px;padding-top:15px;border-top:1px solid #ddd;'
+    f'font-size:12px;color:#999;text-align:center;">'
+    f'SENA - Servicio Nacional de Aprendizaje<br>'
+    f'Sistema de Gestion de Carnets Digitales<br>'
+    f'Este es un correo automatico. No responda a este mensaje.'
     f'</div>'
 )
 
@@ -150,3 +158,43 @@ async def send_security_alert(email: str, username: str) -> None:
     )
 
     await send_email(to=email, subject=subject, text_body=text_body, html_body=html_body)
+
+
+async def send_reset_password(email: str, username: str, reset_token: str) -> bool:
+    subject = "Restablecer contrasena - SENA Carnet Digital"
+
+    text_body = (
+        f"Hola {username},\n\n"
+        f"Has solicitado restablecer tu contrasena.\n\n"
+        f"Usa el siguiente token en el formulario de restablecimiento:\n\n"
+        f"    {reset_token}\n\n"
+        f"Este token expirara en {settings.RESET_TOKEN_EXPIRE_MINUTES} minutos.\n\n"
+        f"Si no solicitaste este cambio, ignora este mensaje.\n\n"
+        f"SENA - Sistema de Gestion de Carnets Digitales"
+    )
+
+    html_body = _build_html(
+        title="Restablecer Contrasena",
+        content=(
+            f'<p style="color:#555;font-size:14px;line-height:1.6;">'
+            f'Hola <strong>{username}</strong>,</p>'
+            f'<p style="color:#555;font-size:14px;line-height:1.6;">'
+            f'Has solicitado restablecer tu contrasena. '
+            f'Usa el siguiente token en el formulario de restablecimiento:</p>'
+            f'<div style="background:#f5fdf2;border:2px dashed {SENA_GREEN};border-radius:8px;'
+            f'padding:20px;text-align:center;margin:20px 0;">'
+            f'<p style="color:#888;font-size:11px;margin:0 0 8px;text-transform:uppercase;'
+            f'letter-spacing:2px;">Token de restablecimiento</p>'
+            f'<p style="font-size:14px;font-weight:bold;'
+            f'color:#333;margin:0;font-family:Courier New,monospace;word-break:break-all;">'
+            f'{reset_token}</p>'
+            f'<p style="color:#999;font-size:11px;margin:8px 0 0;">'
+            f'Expira en {settings.RESET_TOKEN_EXPIRE_MINUTES} minutos</p>'
+            f'</div>'
+            f'<p style="color:#888;font-size:13px;line-height:1.5;">'
+            f'Si no solicitaste este cambio, ignora este mensaje.<br>'
+            f'Servicio Nacional de Aprendizaje</p>'
+        ),
+    )
+
+    return await send_email(to=email, subject=subject, text_body=text_body, html_body=html_body)
