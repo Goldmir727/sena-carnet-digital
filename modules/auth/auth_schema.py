@@ -23,3 +23,20 @@ class PasswordResetRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+
+class LoginResponse(BaseModel):
+    preauth_token: str
+    message: str
+    requires_2fa: bool = True
+    email_masked: str
+    email_sent: bool = True
+
+
+class Verify2FARequest(BaseModel):
+    preauth_token: str
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class Resend2FARequest(BaseModel):
+    preauth_token: str

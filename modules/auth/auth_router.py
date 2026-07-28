@@ -5,7 +5,10 @@ from core.database import get_db
 from core.rate_limit import rate_limiter, get_client_ip
 from core.config import settings
 from modules.auth.auth_service import AuthService
-from modules.auth.auth_schema import RefreshRequest, ForgotPasswordRequest, PasswordResetRequest
+from modules.auth.auth_schema import (
+    RefreshRequest, ForgotPasswordRequest, PasswordResetRequest,
+    Verify2FARequest, Resend2FARequest
+)
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -21,6 +24,32 @@ async def sign_in(
 
     service = AuthService(db)
     return await service.login(form_data.username, form_data.password, request)
+
+
+@router.post("/verify-2fa", status_code=status.HTTP_200_OK)
+async def verify_2fa(
+    request: Request,
+    body: Verify2FARequest,
+    db: AsyncSession = Depends(get_db)
+):
+    client_ip = get_client_ip(request)
+    rate_limiter.check(f"verify2fa:{client_ip}", settings.TWO_FA_MAX_ATTEMPTS, settings.RATE_LIMIT_WINDOW_SECONDS)
+
+    service = AuthService(db)
+    return await service.verify_2fa(body.preauth_token, body.code)
+
+
+@router.post("/resend-2fa", status_code=status.HTTP_200_OK)
+async def resend_2fa(
+    request: Request,
+    body: Resend2FARequest,
+    db: AsyncSession = Depends(get_db)
+):
+    client_ip = get_client_ip(request)
+    rate_limiter.check(f"resend2fa:{client_ip}", 3, 120)
+
+    service = AuthService(db)
+    return await service.resend_2fa(body.preauth_token)
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)

@@ -14,6 +14,6 @@ class Attendance(Base):
         default=lambda: datetime.now(timezone.utc)
     )
     ubicacion: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_extra: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
 
     user = relationship("User", back_populates="attendances")
