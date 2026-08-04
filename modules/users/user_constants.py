@@ -1,4 +1,4 @@
-ADMIN_ROLE = "Administrador"
+ADMIN_ROLE = "Coordinador"
 VALIDATOR_ROLE = "Validador"
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}

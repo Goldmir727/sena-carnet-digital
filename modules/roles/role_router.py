@@ -13,7 +13,7 @@ async def read_roles(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Rol insuficiente.")
     service = RoleService(db)
     return await service.get_all_roles()
@@ -25,7 +25,7 @@ async def read_role_by_name(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Rol insuficiente.")
     service = RoleService(db)
     return await service.get_role_by_name(nom)
@@ -37,7 +37,7 @@ async def read_role_by_id(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Rol insuficiente.")
     service = RoleService(db)
     return await service.get_role_by_id(id)
@@ -49,7 +49,7 @@ async def add_role(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Rol insuficiente.")
     service = RoleService(db)
     return await service.create_role(role_in)
@@ -61,7 +61,7 @@ async def remove_role(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Rol insuficiente.")
     service = RoleService(db)
     return await service.delete_role_by_id(role_id)

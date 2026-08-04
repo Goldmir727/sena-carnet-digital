@@ -22,6 +22,8 @@ class Settings:
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@sena.edu.co")
     VERIFICATION_CODE_EXPIRE_MINUTES: int = int(os.getenv("VERIFICATION_CODE_EXPIRE_MINUTES", "5"))
     TWO_FA_MAX_ATTEMPTS: int = int(os.getenv("TWO_FA_MAX_ATTEMPTS", "5"))
+    QR_CARNET_EXPIRE_MINUTES: int = int(os.getenv("QR_CARNET_EXPIRE_MINUTES", "15"))
+    QR_CLASE_EXPIRE_MINUTES: int = int(os.getenv("QR_CLASE_EXPIRE_MINUTES", "15"))
     CARNET_DURATION_DAYS: int = int(os.getenv("CARNET_DURATION_DAYS", "365"))
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads/fotos")
     QR_SECRET: str = os.getenv("QR_SECRET", SECRET_KEY)

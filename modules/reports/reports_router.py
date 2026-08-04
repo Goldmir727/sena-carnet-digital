@@ -19,7 +19,7 @@ async def report_usuarios(
 
 @router.get("/carnets", status_code=status.HTTP_200_OK)
 async def report_carnets(
-    estado: str | None = Query(None, regex="^(Activo|Suspendido|Vencido|Inactivo)$"),
+    estado: str | None = Query(None, pattern="^(Activo|Suspendido|Vencido|Inactivo)$"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user)
 ):
@@ -49,7 +49,7 @@ async def report_estadisticas(
 
 @router.get("/export/pdf", status_code=status.HTTP_200_OK)
 async def export_pdf(
-    tipo: str = Query(..., regex="^(usuarios|carnets|asistencias)$"),
+    tipo: str = Query(..., pattern="^(usuarios|carnets|asistencias)$"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user)
 ):
@@ -64,7 +64,7 @@ async def export_pdf(
 
 @router.get("/export/excel", status_code=status.HTTP_200_OK)
 async def export_excel(
-    tipo: str = Query(..., regex="^(usuarios|carnets|asistencias)$"),
+    tipo: str = Query(..., pattern="^(usuarios|carnets|asistencias)$"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user)
 ):

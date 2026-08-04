@@ -46,7 +46,7 @@ async def get_my_carnet(
 
 @router.get("/", response_model=list[CarnetDetailResponse], status_code=status.HTTP_200_OK)
 async def list_carnets(
-    estado: str | None = Query(None, regex="^(Activo|Suspendido|Vencido|Inactivo)$"),
+    estado: str | None = Query(None, pattern="^(Activo|Suspendido|Vencido|Inactivo)$"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user)
 ):

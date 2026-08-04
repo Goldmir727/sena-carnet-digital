@@ -136,18 +136,54 @@ async def get_current_user(
 
 
 async def get_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user["role_name"] != "Administrador":
+    if current_user["role_name"] != "Coordinador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Se requiere rol de Administrador."
+            detail="Acceso denegado. Se requiere rol de Coordinador."
         )
     return current_user
 
 
 async def get_validator_user(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user["role_name"] not in ("Administrador", "Validador"):
+    if current_user["role_name"] not in ("Coordinador", "Validador"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Se requiere rol de Validador o Administrador."
+            detail="Acceso denegado. Se requiere rol de Validador o Coordinador."
+        )
+    return current_user
+
+
+async def get_coordinador_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] != "Coordinador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Coordinador."
+        )
+    return current_user
+
+
+async def get_docente_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] != "Docente":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Docente."
+        )
+    return current_user
+
+
+async def get_aprendiz_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] != "Aprendiz":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Aprendiz."
+        )
+    return current_user
+
+
+async def get_funcionario_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role_name"] != "Funcionario":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requiere rol de Funcionario."
         )
     return current_user

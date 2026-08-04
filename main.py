@@ -1,15 +1,18 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from modules.auth.auth_router import router as auth_router
 from modules.roles.role_router import router as role_router
 from modules.users.user_router import router as user_router
-from modules.tasks.task_router import router as task_router
 from modules.carnet.carnet_router import router as carnet_router
 from modules.validation.validation_router import router as validation_router
 from modules.attendance.attendance_router import router as attendance_router
 from modules.reports.reports_router import router as reports_router
+from modules.grupos.grupo_router import router as grupo_router
+from modules.qr.qr_router import router as qr_router
+from modules.asistencia.asistencia_router import router as asistencia_router
 from core.logger import logger
 
 
@@ -42,8 +45,15 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(role_router)
 app.include_router(user_router)
-app.include_router(task_router)
 app.include_router(carnet_router)
 app.include_router(validation_router)
 app.include_router(attendance_router)
-app.include_router(reports_router) 
+app.include_router(reports_router)
+app.include_router(grupo_router)
+app.include_router(qr_router)
+app.include_router(asistencia_router)
+
+import os
+from core.config import settings
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

@@ -338,7 +338,7 @@ class UserService:
             if user_update.role_id is not None or user_update.is_active is not None:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Permiso denegado. Solo un Administrador puede alterar roles o estados.",
+                    detail="Permiso denegado. Solo un Coordinador puede alterar roles o estados.",
                 )
 
         if not await self._user_exists(target_user_id):
