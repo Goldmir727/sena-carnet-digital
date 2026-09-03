@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, ShieldCheck, X } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { hasPermission } from '../../constants/permissions';
 import { MENU_ITEMS } from '../../constants/menu';
 import { ROLE_BADGE_STYLES } from '../../constants/roles';

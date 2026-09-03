@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as authApi from '../api/auth';
 import {
   setSession,
@@ -9,8 +9,7 @@ import {
 } from '../utils/session';
 import { decodeJwt } from '../utils/jwt';
 import { ROLE_ID_NAME } from '../constants/roles';
-
-const AuthContext = createContext(null);
+import { AuthContext } from './contexts';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getStoredUser());
@@ -18,6 +17,12 @@ export function AuthProvider({ children }) {
   const [preauthToken, setPreauthToken] = useState(null);
   const [step, setStep] = useState('login'); // 'login' | '2fa'
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const onToken = (e) => setAccessToken(e.detail);
+    window.addEventListener('session:token', onToken);
+    return () => window.removeEventListener('session:token', onToken);
+  }, []);
 
   const buildUser = useCallback((token) => {
     const payload = decodeJwt(token);
@@ -96,8 +101,3 @@ export function AuthProvider({ children }) {
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth debe usarse dentro de <AuthProvider>');
-  return ctx;
-}

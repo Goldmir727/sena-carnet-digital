@@ -3,12 +3,13 @@ export const REFRESH_KEY = 'refresh_token';
 export const USER_KEY = 'sena_user';
 
 export function setSession({ access_token, refresh_token }) {
-  if (access_token) localStorage.setItem(ACCESS_KEY, access_token);
+  if (access_token) setAccessToken(access_token);
   if (refresh_token) localStorage.setItem(REFRESH_KEY, refresh_token);
 }
 
 export function setAccessToken(token) {
   localStorage.setItem(ACCESS_KEY, token);
+  window.dispatchEvent(new CustomEvent('session:token', { detail: token }));
 }
 
 export function getAccessToken() {

@@ -9,6 +9,9 @@ export const ROLE_PERMISSIONS = {
     'carnet.write',
     'qr.carnet',
     'reports.view',
+    'asistencia.grupo.read',
+    'asistencia.excel',
+    'validar.qr',
   ],
   Docente: [
     'dashboard.view',

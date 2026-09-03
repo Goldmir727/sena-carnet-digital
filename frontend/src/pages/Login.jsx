@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Mail, Lock, KeyRound, ArrowLeft, ShieldCheck } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import Spinner from '../components/common/Spinner';
 
 const inputClass =
