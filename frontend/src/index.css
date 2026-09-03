@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sena-green: #0F7A4D;
+  --color-sena-green-dark: #0A5A39;
+  --color-sena-green-light: #E8F5EE;
+  --color-sena-yellow: #F2B43A;
+  --color-sena-bg: #F8FAFC;
+  --color-sena-ink: #17212B;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-sena-bg text-sena-ink antialiased;
+  }
+}
