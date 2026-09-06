@@ -43,7 +43,7 @@ class UserService:
             bool: True si existe, False en caso contrario.
         """
         result = await self.db.execute(
-            text("SELECT 1 FROM users WHERE username = :username"),
+            text("SELECT 1 FROM users WHERE email = :username OR document = :username"),
             {"username": username},
         )
         return result.first() is not None
@@ -107,7 +107,7 @@ class UserService:
         query = """
             SELECT 1
             FROM users
-            WHERE numero_documento = :doc
+            WHERE document = :doc
         """
 
         params = {"doc": document}
@@ -150,8 +150,10 @@ class UserService:
 
         logger.info("Consultando todos los usuarios.")
         query = text("""
-            SELECT id, username, email, nombres, apellidos, tipo_documento,
-                   numero_documento, foto_perfil, is_active, role_id
+                 SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
+                     document_type AS tipo_documento, document AS numero_documento,
+                     photo_profile AS foto_perfil,
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
             FROM users ORDER BY id ASC;
         """)
         result = await self.db.execute(query)
@@ -172,8 +174,10 @@ class UserService:
         """
         logger.info(f"Consultando usuario ID: {user_id}")
         query = text("""
-            SELECT id, username, email, nombres, apellidos, tipo_documento,
-                   numero_documento, foto_perfil, is_active, role_id
+                 SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
+                     document_type AS tipo_documento, document AS numero_documento,
+                     photo_profile AS foto_perfil,
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
             FROM users WHERE id = :id;
         """)
         result = await self.db.execute(query, {"id": user_id})
@@ -203,12 +207,12 @@ class UserService:
         """
         logger.info(f"Buscando usuarios con: {term}")
         query = text("""
-            SELECT id, username, email, nombres, apellidos, tipo_documento,
-                   numero_documento, is_active, role_id
+                 SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
+                     document_type AS tipo_documento, document AS numero_documento,
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
             FROM users
-            WHERE username ILIKE :term OR email ILIKE :term
-               OR numero_documento ILIKE :term OR nombres ILIKE :term
-               OR apellidos ILIKE :term
+                WHERE email ILIKE :term OR document ILIKE :term
+                    OR name ILIKE :term OR last_name ILIKE :term
             ORDER BY id ASC;
         """)
         result = await self.db.execute(query, {"term": f"%{term}%"})
@@ -265,24 +269,24 @@ class UserService:
         hashed_pwd = hash_password(user_data.password)
 
         query = text("""
-            INSERT INTO users (username, email, hashed_password, nombres, apellidos,
-                               tipo_documento, numero_documento, is_active, role_id)
-            VALUES (:username, :email, :hashed_password, :nombres, :apellidos,
-                    :tipo_documento, :numero_documento, TRUE, :role_id)
-            RETURNING id, username, email, nombres, apellidos, tipo_documento,
-                      numero_documento, is_active, role_id;
+            INSERT INTO users (name, last_name, document_type, document, email,
+                       password_hash, user_status, role_id, registration_date)
+            VALUES (:name, :last_name, :document_type, :document, :email,
+                :password_hash, 'ACTIVE', :role_id, NOW())
+            RETURNING id, email AS username, email, name AS nombres, last_name AS apellidos,
+                  document_type AS tipo_documento, document AS numero_documento,
+                      TRUE AS is_active, role_id;
         """)
         try:
             result = await self.db.execute(
                 query,
                 {
-                    "username": user_data.username,
+                    "name": user_data.nombres or user_data.username,
+                    "last_name": user_data.apellidos or "-",
+                    "document_type": user_data.tipo_documento or "CC",
+                    "document": user_data.numero_documento or user_data.username,
                     "email": user_data.email,
-                    "hashed_password": hashed_pwd,
-                    "nombres": user_data.nombres,
-                    "apellidos": user_data.apellidos,
-                    "tipo_documento": user_data.tipo_documento,
-                    "numero_documento": user_data.numero_documento,
+                    "password_hash": hashed_pwd,
                     "role_id": user_data.role_id,
                 },
             )
@@ -353,10 +357,10 @@ class UserService:
         # Campos permitidos para actualización.
         field_map = {
             "email": "email",
-            "nombres": "nombres",
-            "apellidos": "apellidos",
-            "tipo_documento": "tipo_documento",
-            "numero_documento": "numero_documento",
+            "nombres": "name",
+            "apellidos": "last_name",
+            "tipo_documento": "document_type",
+            "numero_documento": "document",
         }
 
         for attr, col in field_map.items():
@@ -379,10 +383,10 @@ class UserService:
                 params[col] = value
 
         if user_update.password is not None:
-            update_fields.append("hashed_password = :hashed_password")
+            update_fields.append("password_hash = :password_hash")
             
            # Si se recibe una nueva contraseña, se almacena cifrada.
-            params["hashed_password"] = hash_password(user_update.password)
+            params["password_hash"] = hash_password(user_update.password)
 
         if user_update.role_id is not None:
             if not await self._role_exists(user_update.role_id):
@@ -394,8 +398,8 @@ class UserService:
             params["role_id"] = user_update.role_id
 
         if user_update.is_active is not None:
-            update_fields.append("is_active = :is_active")
-            params["is_active"] = user_update.is_active
+            update_fields.append("user_status = :user_status")
+            params["user_status"] = "ACTIVE" if user_update.is_active else "INACTIVE"
 
         if not update_fields:
             raise HTTPException(
@@ -408,8 +412,10 @@ class UserService:
             UPDATE users
             SET {', '.join(update_fields)}
             WHERE id = :id
-            RETURNING id, username, email, nombres, apellidos, tipo_documento,
-                      numero_documento, foto_perfil, is_active, role_id;
+            RETURNING id, email AS username, email, name AS nombres, last_name AS apellidos,
+                      document_type AS tipo_documento, document AS numero_documento,
+                      photo_profile AS foto_perfil,
+                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id;
         """
 
         try:
@@ -444,7 +450,7 @@ class UserService:
         logger.info(f"Desactivando lógicamente usuario ID: {user_id}")
         result = await self.db.execute(
             text(
-                "UPDATE users SET is_active = FALSE WHERE id = :id AND is_active = TRUE RETURNING id, username, email, is_active;"
+                "UPDATE users SET user_status = 'INACTIVE' WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO') RETURNING id, email AS username, email, FALSE AS is_active;"
             ),
             {"id": user_id},
         )
@@ -485,8 +491,8 @@ class UserService:
         try:
             result = await self.db.execute(
                 text(
-                    "UPDATE users SET foto_perfil = :foto WHERE id = :id "
-                    "RETURNING id, username, foto_perfil;"
+                    "UPDATE users SET photo_profile = :foto WHERE id = :id "
+                    "RETURNING id, email AS username, photo_profile AS foto_perfil;"
                 ),
                 {"foto": foto_path, "id": user_id},
             )

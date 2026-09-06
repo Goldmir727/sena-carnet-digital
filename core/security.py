@@ -117,10 +117,12 @@ async def get_current_user(
         raise credentials_exception
 
     query = text("""
-        SELECT u.id, u.username, u.email, u.is_active, u.role_id, r.name as role_name
+         SELECT u.id, u.email AS username, u.email, 
+             (u.user_status IN ('ACTIVE', 'ACTIVO')) AS is_active,
+             u.role_id, r.name as role_name
         FROM users u
         INNER JOIN roles r ON u.role_id = r.id
-        WHERE u.id = :user_id AND u.is_active = TRUE;
+        WHERE u.id = :user_id AND u.user_status IN ('ACTIVE', 'ACTIVO');
     """)
 
     result = await db.execute(query, {"user_id": user_id})

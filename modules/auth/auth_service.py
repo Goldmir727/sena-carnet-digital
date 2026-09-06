@@ -22,9 +22,10 @@ class AuthService:
         logger.info(f"Intento de login para: {username_in}")
 
         query = text("""
-            SELECT id, username, hashed_password, email, is_active,
-                   intentos_fallidos, bloqueado_hasta, role_id
-            FROM users WHERE username = :username;
+                 SELECT id, email, document, password_hash, user_status, role_id,
+                     name, last_name
+                 FROM users
+                 WHERE email = :username OR document = :username;
         """)
         result = await self.db.execute(query, {"username": username_in})
         user = result.mappings().first()
@@ -36,30 +37,15 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"}
             )
 
-        if user["bloqueado_hasta"] and datetime.now(timezone.utc) < user["bloqueado_hasta"]:
-            raise AccountBlockedError(
-                detail=f"Cuenta bloqueada hasta {user['bloqueado_hasta']}. "
-                       f"Revise su correo {user['email']} para instrucciones de desbloqueo."
-            )
-
-        if not verify_password(password_in, user["hashed_password"]):
-            await self._register_failed_attempt(user["id"])
-            if user["intentos_fallidos"] + 1 >= settings.MAX_LOGIN_ATTEMPTS:
-                await self._block_account(user["id"])
-                raise AccountBlockedError(
-                    detail=f"Cuenta bloqueada por {settings.BLOCK_DURATION_MINUTES} minutos. "
-                           f"Se ha enviado una alerta a {user['email']}."
-                )
+        if not verify_password(password_in, user["password_hash"]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Credenciales inválidas",
                 headers={"WWW-Authenticate": "Bearer"}
             )
 
-        if not user["is_active"]:
+        if user["user_status"] not in ("ACTIVE", "ACTIVO", "active", "activo"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
-
-        await self._reset_failed_attempts(user["id"])
 
         if not user["email"]:
             raise HTTPException(
@@ -81,12 +67,13 @@ class AuthService:
         )
         await self.db.commit()
 
-        email_sent = await send_verification_code(user["email"], user["username"], code)
+        login_name = f"{user['name']} {user['last_name']}"
+        email_sent = await send_verification_code(user["email"], login_name, code)
 
         email_masked = self._mask_email(user["email"])
 
         preauth_token = create_preauth_token(data={
-            "sub": user["username"],
+            "sub": user["email"],
             "user_id": user["id"],
             "email": user["email"]
         })
@@ -160,17 +147,17 @@ class AuthService:
         )
         await self.db.commit()
 
-        user_query = text("SELECT id, username, email, role_id FROM users WHERE id = :id AND is_active = TRUE;")
+        user_query = text("SELECT id, email, role_id FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');")
         user_result = await self.db.execute(user_query, {"id": user_id})
         user = user_result.mappings().first()
 
         access_token = create_access_token(data={
-            "sub": user["username"],
+            "sub": user["email"],
             "user_id": user["id"],
             "role_id": user["role_id"]
         })
         refresh_token = create_refresh_token(data={
-            "sub": user["username"],
+            "sub": user["email"],
             "user_id": user["id"]
         })
 
@@ -185,7 +172,7 @@ class AuthService:
         user_id = payload.get("user_id")
         username = payload.get("sub")
 
-        user_query = text("SELECT email FROM users WHERE id = :id AND is_active = TRUE;")
+        user_query = text("SELECT email FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');")
         user_result = await self.db.execute(user_query, {"id": user_id})
         user = user_result.mappings().first()
         if not user:
@@ -249,7 +236,7 @@ class AuthService:
                 detail="Token refresh corrupto."
             )
 
-        query = text("SELECT id, is_active FROM users WHERE id = :id AND is_active = TRUE;")
+        query = text("SELECT id FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');")
         result = await self.db.execute(query, {"id": user_id})
         if not result.first():
             raise HTTPException(
@@ -268,7 +255,7 @@ class AuthService:
 
     async def forgot_password(self, email: str) -> dict:
         query = text("""
-            SELECT id, email, username
+            SELECT id, email, name, last_name
             FROM users
             WHERE email = :email;
         """)
@@ -281,7 +268,7 @@ class AuthService:
 
         subject = "Recuperacion de contrasena"
         body = (
-            f"Hola {user['username']},\n\n"
+            f"Hola {user['name']} {user['last_name']},\n\n"
             f"Se solicito restablecer tu contrasena.\n\n"
             f"Copia el siguiente token completo:\n\n"
             f"------------------------------\n"
@@ -317,7 +304,7 @@ class AuthService:
 
         hashed = hash_password(new_password)
         update = await self.db.execute(
-            text("UPDATE users SET hashed_password = :pwd WHERE email = :email;"),
+            text("UPDATE users SET password_hash = :pwd WHERE email = :email;"),
             {"pwd": hashed, "email": email}
         )
         await self.db.commit()
@@ -326,35 +313,6 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se pudo actualizar la contrasena.")
 
         return {"message": "Contrasena restablecida exitosamente."}
-
-    async def _register_failed_attempt(self, user_id: int) -> None:
-        await self.db.execute(
-            text("UPDATE users SET intentos_fallidos = intentos_fallidos + 1 WHERE id = :id;"),
-            {"id": user_id}
-        )
-        await self.db.commit()
-
-    async def _block_account(self, user_id: int) -> None:
-        block_until = datetime.now(timezone.utc) + timedelta(minutes=settings.BLOCK_DURATION_MINUTES)
-
-        await self.db.execute(
-            text("UPDATE users SET bloqueado_hasta = :block_until WHERE id = :id;"),
-            {"id": user_id, "block_until": block_until}
-        )
-        await self.db.commit()
-
-        user_query = text("SELECT email, username FROM users WHERE id = :id;")
-        result = await self.db.execute(user_query, {"id": user_id})
-        user = result.mappings().first()
-        if user:
-            await send_security_alert(user["email"], user["username"])
-
-    async def _reset_failed_attempts(self, user_id: int) -> None:
-        await self.db.execute(
-            text("UPDATE users SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = :id;"),
-            {"id": user_id}
-        )
-        await self.db.commit()
 
     async def _invalidate_user_codes(self, user_id: int) -> None:
         await self.db.execute(

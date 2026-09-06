@@ -12,9 +12,10 @@ class ReportsService:
 
     async def report_usuarios(self) -> list[dict]:
         query = text("""
-            SELECT u.id, u.username, u.email, u.nombres, u.apellidos,
-                   u.tipo_documento, u.numero_documento, u.is_active,
-                   r.name as rol, u.created_at
+                 SELECT u.id, u.email, u.name AS nombres, u.last_name AS apellidos,
+                     u.document_type AS tipo_documento, u.document AS numero_documento,
+                     (u.user_status IN ('ACTIVE', 'ACTIVO')) AS is_active,
+                     r.name as rol, u.registration_date AS created_at
             FROM users u
             JOIN roles r ON r.id = u.role_id
             ORDER BY u.id ASC;
@@ -24,8 +25,9 @@ class ReportsService:
 
     async def report_carnets(self) -> list[dict]:
         query = text("""
-            SELECT c.id, c.uuid, c.estado, c.fecha_emision, c.fecha_vencimiento,
-                   u.nombres, u.apellidos, u.numero_documento
+                 SELECT c.id, c.qr_code AS uuid, c.status AS estado, c.issue_date AS fecha_emision,
+                     c.expiration_date AS fecha_vencimiento, u.name AS nombres,
+                     u.last_name AS apellidos, u.document AS numero_documento
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             ORDER BY c.id DESC;
@@ -35,11 +37,12 @@ class ReportsService:
 
     async def report_carnets_por_estado(self, estado: str) -> list[dict]:
         query = text("""
-            SELECT c.id, c.uuid, c.estado, c.fecha_emision, c.fecha_vencimiento,
-                   u.nombres, u.apellidos, u.numero_documento
+                 SELECT c.id, c.qr_code AS uuid, c.status AS estado, c.issue_date AS fecha_emision,
+                     c.expiration_date AS fecha_vencimiento, u.name AS nombres,
+                     u.last_name AS apellidos, u.document AS numero_documento
             FROM carnets c
             JOIN users u ON u.id = c.user_id
-            WHERE c.estado = :estado
+            WHERE c.status = :estado
             ORDER BY c.id DESC;
         """)
         result = await self.db.execute(query, {"estado": estado})
@@ -47,11 +50,11 @@ class ReportsService:
 
     async def report_asistencias(self, limit: int = 500) -> list[dict]:
         query = text("""
-            SELECT a.id, a.fecha_hora, a.ubicacion,
-                   u.nombres, u.apellidos, u.numero_documento
+                 SELECT a.id, a.time AS fecha_hora, a.observations AS ubicacion,
+                     u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
             FROM asistencias a
             JOIN users u ON u.id = a.user_id
-            ORDER BY a.fecha_hora DESC
+            ORDER BY a.time DESC
             LIMIT :limit;
         """)
         result = await self.db.execute(query, {"limit": limit})
@@ -59,11 +62,11 @@ class ReportsService:
 
     async def report_estadisticas(self) -> dict:
         total_users = await self.db.execute(text("SELECT COUNT(*) as c FROM users;"))
-        active_users = await self.db.execute(text("SELECT COUNT(*) as c FROM users WHERE is_active = TRUE;"))
+        active_users = await self.db.execute(text("SELECT COUNT(*) as c FROM users WHERE user_status IN ('ACTIVE', 'ACTIVO');"))
         total_carnets = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets;"))
-        carnet_activos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE estado = 'Activo';"))
-        carnet_vencidos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE estado = 'Vencido';"))
-        carnet_inactivos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE estado = 'Inactivo';"))
+        carnet_activos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE status = 'Activo';"))
+        carnet_vencidos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE status = 'Vencido';"))
+        carnet_inactivos = await self.db.execute(text("SELECT COUNT(*) as c FROM carnets WHERE status = 'Inactivo';"))
         total_asistencias = await self.db.execute(text("SELECT COUNT(*) as c FROM asistencias;"))
 
         def val(r):
