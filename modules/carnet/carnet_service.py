@@ -62,7 +62,7 @@ class CarnetService:
             })
             await self.db.commit()
             row = dict(result.mappings().first())
-            logger.info(f"Carnet generado exitosamente: UUID={carnet_uuid}")
+            logger.info(f"Carnet generado exitosamente: user={user_id} qr={qr_token[:12]}...")
             return row
         except Exception as e:
             await self.db.rollback()
@@ -177,11 +177,29 @@ class CarnetService:
     async def regenerate_carnet(self, user_id: int) -> dict:
         logger.info(f"Regenerando carnet para usuario ID: {user_id}")
 
-        await self.db.execute(
-            text("UPDATE carnets SET status = 'Inactivo' WHERE user_id = :uid AND status = 'Activo';"),
+        # Pasar por la máquina de estados: solo inactivar lo permitido.
+        # Activo -> Inactivo directo está prohibido, ir vía Suspendido.
+        cur = await self.db.execute(
+            text("SELECT id, status FROM carnets WHERE user_id = :uid ORDER BY id DESC LIMIT 1;"),
             {"uid": user_id}
         )
-        await self.db.commit()
+        row = cur.mappings().first()
+        if row and row["status"] == "Activo":
+            await self.db.execute(
+                text("UPDATE carnets SET status = 'Suspendido' WHERE id = :id;"),
+                {"id": row["id"]}
+            )
+            await self.db.execute(
+                text("UPDATE carnets SET status = 'Inactivo' WHERE id = :id;"),
+                {"id": row["id"]}
+            )
+            await self.db.commit()
+        elif row:
+            await self.db.execute(
+                text("UPDATE carnets SET status = 'Inactivo' WHERE id = :id;"),
+                {"id": row["id"]}
+            )
+            await self.db.commit()
 
         return await self.generate_carnet(user_id)
 

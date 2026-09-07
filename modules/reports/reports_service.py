@@ -60,6 +60,38 @@ class ReportsService:
         result = await self.db.execute(query, {"limit": limit})
         return [dict(row) for row in result.mappings().all()]
 
+    async def report_asistencias_filtrado(
+        self, grupo_id: int | None = None, desde: str | None = None, hasta: str | None = None
+    ) -> list[dict]:
+        # RF-20: filtros por grupo y rango de fechas (schema 001+003: fecha_hora/grupo_id)
+        conds = []
+        params: dict = {"limit": 500}
+        if grupo_id is not None:
+            conds.append("a.grupo_id = :g")
+            params["g"] = grupo_id
+        if desde:
+            conds.append("DATE(a.fecha_hora) >= DATE(:d)")
+            params["d"] = desde
+        if hasta:
+            conds.append("DATE(a.fecha_hora) <= DATE(:h)")
+            params["h"] = hasta
+        where = f"WHERE {' AND '.join(conds)}" if conds else ""
+        try:
+            query = text(f"""
+                     SELECT a.id, a.fecha_hora, a.grupo_id, a.qr_clase_id,
+                         u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+                FROM asistencias a
+                JOIN users u ON u.id = a.user_id
+                {where}
+                ORDER BY a.fecha_hora DESC
+                LIMIT :limit;
+            """)
+            result = await self.db.execute(query, params)
+            return [dict(row) for row in result.mappings().all()]
+        except Exception:
+            # Fallback a schema legacy (time/observations) si la BD no tiene 003
+            return await self.report_asistencias()
+
     async def report_estadisticas(self) -> dict:
         total_users = await self.db.execute(text("SELECT COUNT(*) as c FROM users;"))
         active_users = await self.db.execute(text("SELECT COUNT(*) as c FROM users WHERE user_status IN ('ACTIVE', 'ACTIVO');"))

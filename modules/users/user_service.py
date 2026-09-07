@@ -154,7 +154,7 @@ class UserService:
                      document_type AS tipo_documento, document AS numero_documento,
                      photo_profile AS foto_perfil,
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
-            FROM users ORDER BY id ASC;
+            FROM users WHERE user_status IN ('ACTIVE', 'ACTIVO') ORDER BY id ASC;
         """)
         result = await self.db.execute(query)
         return [dict(row) for row in result.mappings().all()]
@@ -211,8 +211,9 @@ class UserService:
                      document_type AS tipo_documento, document AS numero_documento,
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
             FROM users
-                WHERE email ILIKE :term OR document ILIKE :term
+                WHERE user_status IN ('ACTIVE', 'ACTIVO') AND (email ILIKE :term OR document ILIKE :term
                     OR name ILIKE :term OR last_name ILIKE :term
+                    OR document_type ILIKE :term)
             ORDER BY id ASC;
         """)
         result = await self.db.execute(query, {"term": f"%{term}%"})
@@ -291,7 +292,33 @@ class UserService:
                 },
             )
             await self.db.commit()
-            return dict(result.mappings().first())
+            created = dict(result.mappings().first())
+            # RF-06: si el rol es Aprendiz, generar carnet automáticamente
+            try:
+                role_res = await self.db.execute(
+                    text("SELECT name FROM roles WHERE id = :rid;"),
+                    {"rid": user_data.role_id},
+                )
+                role_row = role_res.mappings().first()
+                if role_row and role_row["name"] == "Aprendiz":
+                    from datetime import date, timedelta
+                    from core.config import settings as _settings
+                    from services.qr_service import generate_qr_token
+                    import uuid as _uuid
+                    issue = date.today()
+                    exp = issue + timedelta(days=_settings.CARNET_DURATION_DAYS)
+                    await self.db.execute(
+                        text(
+                            "INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date, status) "
+                            "VALUES (:u, :q, :i, :e, 'Activo');"
+                        ),
+                        {"u": created["id"], "q": generate_qr_token(str(_uuid.uuid4())), "i": issue, "e": exp},
+                    )
+                    await self.db.commit()
+            except Exception:
+                await self.db.rollback()
+                logger.warning("No se pudo auto-generar carnet de Aprendiz (¿tabla sin migrar?).")
+            return created
         except Exception:
             await self.db.rollback()
             logger.exception("Error al guardar usuario.")

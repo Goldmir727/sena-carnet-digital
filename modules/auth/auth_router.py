@@ -53,7 +53,9 @@ async def resend_2fa(
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
-async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+async def refresh_token(body: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    rate_limiter.check(f"refresh:{client_ip}", 10, 60)
     service = AuthService(db)
     return await service.refresh(body.refresh_token)
 
@@ -67,6 +69,8 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request, db: Asy
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-async def reset_password(body: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+async def reset_password(body: PasswordResetRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    rate_limiter.check(f"reset:{client_ip}", 5, 60)
     service = AuthService(db)
     return await service.reset_password(body.token, body.new_password)

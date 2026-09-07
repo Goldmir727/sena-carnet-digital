@@ -13,6 +13,12 @@ from core.rate_limit import rate_limiter, get_client_ip
 from core.exceptions import AccountBlockedError
 from services.email_service import send_verification_code, send_security_alert, send_email
 
+# RF-03/RF-05: estado en memoria (la BD aún no tiene columnas intentos/bloqueo
+# ni tabla de jti; cuando se aplique la migración 004 usar columnas reales).
+_login_failures: dict[str, list[datetime]] = {}
+_blocked_until: dict[str, datetime] = {}
+_used_reset_jti: set[str] = set()
+
 
 class AuthService:
     def __init__(self, db: AsyncSession) -> None:
@@ -20,6 +26,20 @@ class AuthService:
 
     async def login(self, username_in: str, password_in: str, request: Request) -> dict:
         logger.info(f"Intento de login para: {username_in}")
+
+        # RF-03: bloqueo 5 intentos -> 15 min
+        now = datetime.now(timezone.utc)
+        until = _blocked_until.get(username_in)
+        if until and now < until:
+            raise HTTPException(
+                status_code=423,
+                detail="Cuenta bloqueada por intentos fallidos. Intente en 15 minutos.",
+            )
+        # limpiar ventanas viejas (>15min)
+        _login_failures[username_in] = [
+            t for t in _login_failures.get(username_in, [])
+            if (now - t).total_seconds() < settings.BLOCK_DURATION_MINUTES * 60
+        ]
 
         query = text("""
                  SELECT id, email, document, password_hash, user_status, role_id,
@@ -38,11 +58,30 @@ class AuthService:
             )
 
         if not verify_password(password_in, user["password_hash"]):
+            fails = _login_failures.get(username_in, []) + [now]
+            _login_failures[username_in] = fails
+            if len(fails) >= settings.MAX_LOGIN_ATTEMPTS:
+                _blocked_until[username_in] = now + timedelta(minutes=settings.BLOCK_DURATION_MINUTES)
+                try:
+                    if user["email"]:
+                        await send_security_alert(
+                            user["email"], f"{user['name']} {user['last_name']}"
+                        )
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=423,
+                    detail="Cuenta bloqueada 15 minutos por intentos fallidos. Se envió alerta al correo.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Credenciales inválidas",
                 headers={"WWW-Authenticate": "Bearer"}
             )
+
+        # éxito: limpiar contador
+        _login_failures.pop(username_in, None)
+        _blocked_until.pop(username_in, None)
 
         if user["user_status"] not in ("ACTIVE", "ACTIVO", "active", "activo"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
@@ -81,7 +120,7 @@ class AuthService:
         mensaje = (
             f"Codigo de verificacion enviado a {email_masked}"
             if email_sent
-            else f"No se pudo enviar el correo. Usa el codigo desde la BD o reintenta."
+            else "No se pudo enviar el correo. Reintente solicitar el código."
         )
 
         return {
@@ -208,7 +247,7 @@ class AuthService:
         mensaje = (
             f"Nuevo codigo de verificacion enviado a {email_masked}"
             if email_sent
-            else f"No se pudo enviar el correo. Usa el codigo desde la BD o reintenta."
+            else "No se pudo enviar el correo. Reintente solicitar el código."
         )
 
         return {
@@ -236,7 +275,7 @@ class AuthService:
                 detail="Token refresh corrupto."
             )
 
-        query = text("SELECT id FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');")
+        query = text("SELECT id, role_id FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');")
         result = await self.db.execute(query, {"id": user_id})
         if not result.first():
             raise HTTPException(
@@ -244,10 +283,14 @@ class AuthService:
                 detail="Usuario no encontrado o inactivo."
             )
 
+        # Reconsultar rol para no propagar role_id=None del refresh token legacy
+        role_q = await self.db.execute(text("SELECT role_id FROM users WHERE id = :id;"), {"id": user_id})
+        role_row = role_q.mappings().first()
+
         new_access = create_access_token(data={
             "sub": username,
             "user_id": user_id,
-            "role_id": payload.get("role_id")
+            "role_id": role_row["role_id"] if role_row else payload.get("role_id")
         })
 
         return {"access_token": new_access, "token_type": "bearer"}
@@ -292,6 +335,11 @@ class AuthService:
         if payload.get("type") != "reset":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalido.")
 
+        # RF-05: un solo uso (jti)
+        jti = payload.get("jti")
+        if not jti or jti in _used_reset_jti:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token ya utilizado o inválido.")
+
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token sin informacion del usuario.")
@@ -312,6 +360,7 @@ class AuthService:
         if update.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se pudo actualizar la contrasena.")
 
+        _used_reset_jti.add(jti)
         return {"message": "Contrasena restablecida exitosamente."}
 
     async def _invalidate_user_codes(self, user_id: int) -> None:

@@ -15,6 +15,18 @@ class QRService:
         self.db = db
 
     async def generate_qr_carnet(self, user_id: int) -> dict:
+        # RF-14: solo Aprendiz, Docente, Funcionario, Coordinador (no Validador)
+        role_row = await self.db.execute(
+            text("SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = :uid;"),
+            {"uid": user_id}
+        )
+        role = role_row.mappings().first()
+        if role and role["name"] == "Validador":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Los validadores no pueden generar QR de carnet."
+            )
+
         await self.db.execute(
             text("UPDATE qr_carnets SET used = TRUE WHERE user_id = :uid AND used = FALSE;"),
             {"uid": user_id}
@@ -45,7 +57,7 @@ class QRService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo no encontrado.")
 
         asignacion = await self.db.execute(
-            text("SELECT id FROM grupo_docentes WHERE docente_id = :did AND grupo_id = :gid;"),
+            text("SELECT id FROM grupo_docentes WHERE user_id = :did AND grupo_id = :gid;"),
             {"did": docente_id, "gid": grupo_id}
         )
         if not asignacion.first():
@@ -55,7 +67,7 @@ class QRService:
             )
 
         docente = await self.db.execute(
-            text("SELECT id, nombres, apellidos FROM users WHERE id = :did;"),
+            text("SELECT id, name, last_name FROM users WHERE id = :did;"),
             {"did": docente_id}
         )
         docente_row = docente.mappings().first()
@@ -73,7 +85,7 @@ class QRService:
         )
         await self.db.commit()
 
-        docente_nombre = f"{docente_row['nombres']} {docente_row['apellidos']}" if docente_row else ""
+        docente_nombre = f"{docente_row['name']} {docente_row['last_name']}" if docente_row else ""
 
         return {
             "qr_token": token,
