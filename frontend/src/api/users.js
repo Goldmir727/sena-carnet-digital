@@ -54,7 +54,9 @@ export function useUploadPhoto() {
     mutationFn: ({ id, file }) => {
       const form = new FormData();
       form.append('file', file);
-      return api.post(`/users/${id}/foto`, form).then((r) => r.data);
+      return api
+        .post(`/users/${id}/foto`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then((r) => r.data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });

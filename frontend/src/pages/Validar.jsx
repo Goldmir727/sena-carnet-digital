@@ -8,17 +8,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import StatusBadge from '../components/ui/StatusBadge';
 import cn from '../lib/cn';
-
-const getErr = (err) => {
-  const detail = err.response?.data?.detail;
-  if (Array.isArray(detail)) {
-    const primero = detail[0];
-    return primero
-      ? `${primero.msg || primero.message || 'Dato inválido'}${primero.loc ? ` (campo: ${primero.loc.join('.')})` : ''}`
-      : 'Dato inválido';
-  }
-  return detail || err.message || 'Error de conexión con el servidor';
-};
+import { getErr } from '../lib/errors';
 
 export default function Validar() {
   const [mode, setMode] = useState('qr');

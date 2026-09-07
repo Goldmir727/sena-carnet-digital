@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { useCarnets, useGenerarCarnet, useRegenerarCarnet, useCambiarEstadoCarnet } from '../api/carnets';
 import { useUsers } from '../api/users';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
+import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
@@ -31,8 +32,6 @@ const TRANSICIONES = {
   Vencido: ['Activo', 'Inactivo'],
   Inactivo: [],
 };
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 const fmt = (iso) =>
   iso

@@ -24,6 +24,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
 import cn from '../lib/cn';
+import { getErr } from '../lib/errors';
 
 const TABS = [
   { id: 'resumen', label: 'Resumen', icon: BarChart3 },
@@ -31,8 +32,6 @@ const TABS = [
   { id: 'carnets', label: 'Carnets', icon: CreditCard },
   { id: 'asistencias', label: 'Asistencias', icon: CalendarCheck },
 ];
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 const fmt = (iso) =>
   iso

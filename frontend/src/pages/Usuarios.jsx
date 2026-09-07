@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErr } from '../lib/errors';
 import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto } from '../api/users';
 import { useRoles } from '../api/roles';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
@@ -68,8 +69,6 @@ const EMPTY_FORM = {
   tipo_documento: '',
   numero_documento: '',
 };
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 function initials(nombres, apellidos, email) {
   const a = (nombres || '')[0] || '';

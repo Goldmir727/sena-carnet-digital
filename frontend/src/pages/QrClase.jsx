@@ -3,6 +3,7 @@ import { QrCode, RefreshCw, Clock, GraduationCap, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMisGrupos } from '../api/grupos';
 import { useGenerarQrClase, fetchQrImageBlob } from '../api/qr';
+import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -10,8 +11,6 @@ import Select from '../components/ui/Select';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 function formatSegundos(total) {
   const m = Math.floor(total / 60);

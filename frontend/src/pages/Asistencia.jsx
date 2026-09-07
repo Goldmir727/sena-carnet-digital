@@ -24,12 +24,7 @@ import Select from '../components/ui/Select';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import { fieldClass } from '../components/ui/fields';
-
-const getErr = (err) => {
-  const detail = err.response?.data?.detail;
-  if (Array.isArray(detail)) return detail.map((d) => d.msg || d.message).join(' · ');
-  return detail || err.message || 'Error de conexión con el servidor';
-};
+import { getErr } from '../lib/errors';
 
 const fmt = (iso) => {
   if (!iso) return '—';

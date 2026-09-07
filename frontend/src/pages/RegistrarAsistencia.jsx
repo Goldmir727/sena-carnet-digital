@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { ScanLine, CheckCircle2, XCircle, QrCode, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useEscanearAsistencia } from '../api/asistencia';
+import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Badge from '../components/ui/Badge';
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 export default function RegistrarAsistencia() {
   const escanear = useEscanearAsistencia();

@@ -12,6 +12,7 @@ import {
   useAsignarDocentes,
 } from '../api/grupos';
 import { useUsers } from '../api/users';
+import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -23,8 +24,6 @@ import Dropdown from '../components/ui/Dropdown';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
-
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
 
 const parserDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '—';
