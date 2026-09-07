@@ -4,6 +4,7 @@ import PermissionRoute from './PermissionRoute';
 import AppLayout from '../components/layout/AppLayout';
 import Login from '../pages/Login';
 import ForgotPassword from '../pages/ForgotPassword';
+import ResetPassword from '../pages/ResetPassword';
 import Dashboard from '../pages/Dashboard';
 import NotFound from '../pages/NotFound';
 import ModulePlaceholder from '../pages/ModulePlaceholder';
@@ -13,6 +14,7 @@ export default function AppRouter() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
@@ -63,6 +65,14 @@ export default function AppRouter() {
             element={
               <PermissionRoute permission="asistencia.escanear">
                 <ModulePlaceholder title="Registrar asistencia" />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="qr-clase"
+            element={
+              <PermissionRoute permission="qr.clase">
+                <ModulePlaceholder title="QR de clase" />
               </PermissionRoute>
             }
           />
