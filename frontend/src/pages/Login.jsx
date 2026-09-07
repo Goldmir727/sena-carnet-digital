@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Mail, Lock, KeyRound, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, KeyRound, ArrowLeft, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import Spinner from '../components/common/Spinner';
-
-const inputClass =
-  'w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-sena-ink placeholder:text-slate-400 focus:border-sena-green focus:outline-none focus:ring-2 focus:ring-sena-green/30';
+import AuthLayout from '../components/ui/AuthLayout';
+import Logo from '../components/ui/Logo';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
 
 export default function Login() {
   const { user, step } = useAuth();
@@ -15,19 +15,21 @@ export default function Login() {
   if (user) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sena-green to-sena-green-dark px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-sena-yellow">
-            <ShieldCheck className="h-9 w-9 text-sena-green-dark" />
+    <AuthLayout
+      footer="Servicio Nacional de Aprendizaje — SENA"
+    >
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-raised">
+        <div className="border-b border-slate-100 px-6 py-5 sm:px-8">
+          <div className="flex items-center gap-3">
+            <Logo size="md" />
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-sena-ink">Iniciar sesión</h1>
+              <p className="text-sm text-slate-500">Acceso seguro a la plataforma</p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-white">Sistema de Carnets SENA</h1>
-          <p className="mt-1 text-sm text-sena-green-light">
-            Acceso seguro con verificación en dos pasos
-          </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-xl">
+        <div className="px-6 py-6 sm:px-8">
           {step === '2fa' && loginInfo ? (
             <TwoFactorStep loginInfo={loginInfo} onBack={() => setLoginInfo(null)} />
           ) : (
@@ -35,10 +37,9 @@ export default function Login() {
           )}
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
-
 
 function CredentialsStep({ onLoginSuccess }) {
   const { login, loading } = useAuth();
@@ -58,48 +59,52 @@ function CredentialsStep({ onLoginSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-sena-ink">Usuario</label>
-        <div className="relative">
-          <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            className={inputClass}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Tu nombre de usuario"
-            autoComplete="username"
-            required
-          />
+      <div className="mb-1 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sena-tint-100 text-sena-green">
+          <ShieldCheck className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-sena-ink">Credenciales institucionales</p>
+          <p className="text-xs text-slate-500">Tu cuenta de usuario SENA</p>
         </div>
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-sena-ink">Contraseña</label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="password"
-            className={inputClass}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Tu contraseña"
-            autoComplete="current-password"
-            required
-          />
-        </div>
-      </div>
+      <Input
+        label="Usuario"
+        icon={Mail}
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Tu nombre de usuario"
+        autoComplete="username"
+        required
+      />
 
-      <button
+      <Input
+        label="Contraseña"
+        type="password"
+        icon={Lock}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Tu contraseña"
+        autoComplete="current-password"
+        required
+      />
+
+      <Button
         type="submit"
-        disabled={loading || !username || !password}
-        className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sena-green-dark disabled:cursor-not-allowed disabled:opacity-60"
+        fullWidth
+        size="lg"
+        icon={ChevronRight}
+        loading={loading}
+        disabled={!username || !password}
+        className="justify-center"
       >
-        {loading ? <Spinner size="sm" /> : 'Continuar'}
-      </button>
+        {loading ? 'Verificando…' : 'Continuar'}
+      </Button>
 
-      <p className="text-center text-sm text-slate-600">
+      <p className="pt-1 text-center text-sm text-slate-600">
         ¿Olvidaste tu contraseña?{' '}
-        <Link to="/forgot-password" className="font-medium text-sena-green hover:underline">
+        <Link to="/forgot-password" className="font-semibold text-sena-green transition hover:text-sena-green-dark hover:underline">
           Recupérala aquí
         </Link>
       </p>
@@ -140,51 +145,54 @@ function TwoFactorStep({ loginInfo, onBack }) {
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-sena-ink"
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-sena-ink"
       >
         <ArrowLeft className="h-4 w-4" /> Volver
       </button>
 
       <div>
         <h2 className="text-lg font-semibold text-sena-ink">Verificación en dos pasos</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
           Enviamos un código de 6 dígitos a{' '}
-          <span className="font-medium text-sena-ink">{loginInfo.email_masked}</span>
+          <span className="font-semibold text-sena-ink">{loginInfo.email_masked}</span>
         </p>
       </div>
 
-      <div className="relative">
-        <KeyRound className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-        <input
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          className={`${inputClass} text-center text-lg tracking-widest`}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-          placeholder="123456"
-          autoFocus
-          required
-        />
-      </div>
+      <Input
+        label="Código de verificación"
+        icon={KeyRound}
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={6}
+        className="text-center text-lg tracking-[0.4em]"
+        value={code}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+        placeholder="123456"
+        autoComplete="one-time-code"
+        autoFocus
+        required
+      />
 
-      <button
+      <Button
         type="submit"
-        disabled={loading || code.length !== 6}
-        className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sena-green-dark disabled:cursor-not-allowed disabled:opacity-60"
+        fullWidth
+        size="lg"
+        loading={loading}
+        disabled={code.length !== 6}
+        className="justify-center"
       >
-        {loading ? <Spinner size="sm" /> : 'Verificar y entrar'}
-      </button>
+        {loading ? 'Verificando…' : 'Verificar y entrar'}
+      </Button>
 
-      <p className="text-center text-sm text-slate-600">
+      <p className="pt-1 text-center text-sm text-slate-600">
         ¿No llegó el código?{' '}
         <button
           type="button"
           onClick={handleResend}
           disabled={sending}
-          className="font-medium text-sena-green hover:underline"
+          className="font-semibold text-sena-green transition hover:text-sena-green-dark hover:underline"
         >
-          Reenviar código
+          {sending ? 'Reenviando…' : 'Reenviar código'}
         </button>
       </p>
     </form>

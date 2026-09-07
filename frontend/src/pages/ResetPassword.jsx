@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, KeyRound, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, KeyRound, Lock } from 'lucide-react';
 import { resetPassword } from '../api/auth';
-import Spinner from '../components/common/Spinner';
+import AuthLayout from '../components/ui/AuthLayout';
+import Logo from '../components/ui/Logo';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -36,55 +39,58 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sena-green to-sena-green-dark px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-sena-yellow">
-            <ShieldCheck className="h-9 w-9 text-sena-green-dark" />
+    <AuthLayout footer="Servicio Nacional de Aprendizaje — SENA">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-raised">
+        <div className="border-b border-slate-100 px-6 py-5 sm:px-8">
+          <div className="flex items-center gap-3">
+            <Logo size="md" />
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-sena-ink">Nueva contraseña</h1>
+              <p className="text-sm text-slate-500">Elige una contraseña segura</p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-white">Nueva contraseña</h1>
         </div>
-        <div className="rounded-2xl bg-white p-8 shadow-xl">
+
+        <div className="px-6 py-6 sm:px-8">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-sena-green focus:outline-none focus:ring-2 focus:ring-sena-green/30"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nueva contraseña (mín. 6 caracteres)"
-                minLength={6}
-                required
-              />
-            </div>
-            <div className="relative">
-              <KeyRound className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-sena-green focus:outline-none focus:ring-2 focus:ring-sena-green/30"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirmar nueva contraseña"
-                minLength={6}
-                required
-              />
-            </div>
-            <button
+            <Input
+              label="Nueva contraseña"
+              type="password"
+              icon={Lock}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              minLength={6}
+              required
+            />
+            <Input
+              label="Confirmar contraseña"
+              type="password"
+              icon={KeyRound}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Repite tu nueva contraseña"
+              minLength={6}
+              required
+            />
+            <Button
               type="submit"
-              disabled={loading || !newPassword || !confirm}
-              className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white hover:bg-sena-green-dark disabled:opacity-60"
+              fullWidth
+              size="lg"
+              loading={loading}
+              disabled={!newPassword || !confirm}
+              className="justify-center"
             >
-              {loading ? <Spinner /> : 'Guardar contraseña'}
-            </button>
-            <p className="text-center text-sm">
-              <Link to="/login" className="inline-flex items-center gap-1 text-slate-600 hover:text-sena-ink">
+              {loading ? 'Guardando…' : 'Guardar contraseña'}
+            </Button>
+            <p className="pt-1 text-center text-sm">
+              <Link to="/login" className="inline-flex items-center gap-1.5 font-medium text-slate-600 transition hover:text-sena-green">
                 <ArrowLeft className="h-4 w-4" /> Volver al inicio de sesión
               </Link>
             </p>
           </form>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
