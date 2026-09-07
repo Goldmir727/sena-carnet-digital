@@ -125,6 +125,7 @@ export default function Usuarios() {
     });
     setFormErrors({});
     setEditing(row);
+    setCreateOpen(true);
   };
 
   const onCreate = async () => {
@@ -243,7 +244,7 @@ export default function Usuarios() {
       render: (r) => {
         const name = r.role || r.rol || ROLE_ID_NAME[r.role_id] || '—';
         return (
-          <Badge className={ROLE_BADGE_STYLES[name]} variant="outline">
+          <Badge className={ROLE_BADGE_STYLES[name]} variant="solid">
             {name}
           </Badge>
         );
@@ -348,7 +349,7 @@ export default function Usuarios() {
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => (editing ? setEditing(null) : setCreateOpen(false))}>
+            <Button variant="secondary" onClick={() => { setEditing(null); setCreateOpen(false); }}>
               Cancelar
             </Button>
             <Button

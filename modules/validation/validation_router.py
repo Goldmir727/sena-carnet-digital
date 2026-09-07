@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from core.security import get_validator_user
@@ -20,22 +20,32 @@ async def validate_qr(
     return await service.validate_qr(body.qr_token, ubicacion)
 
 
-@router.get("/check/{carnet_id}", response_model=ValidationResponse, status_code=status.HTTP_200_OK)
+@router.get("/check/{codigo}", response_model=ValidationResponse, status_code=status.HTTP_200_OK)
 async def check_carnet_status(
-    carnet_id: int,
-    request: Request,
+    codigo: str = Path(..., description="ID numérico del carnet o su UUID (código único)."),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_validator_user)
 ):
     from sqlalchemy import text
-    res = await db.execute(
-        text(
-            "SELECT c.status AS estado, u.id AS user_id, u.name AS nombres, "
-            "u.last_name AS apellidos FROM carnets c JOIN users u ON u.id=c.user_id "
-            "WHERE c.id = :id;"
-        ),
-        {"id": carnet_id},
-    )
+    if codigo.isdigit():
+        res = await db.execute(
+            text(
+                "SELECT c.status AS estado, u.id AS user_id, u.name AS nombres, "
+                "u.last_name AS apellidos FROM carnets c JOIN users u ON u.id=c.user_id "
+                "WHERE c.id = :id;"
+            ),
+            {"id": int(codigo)},
+        )
+    else:
+        res = await db.execute(
+            text(
+                "SELECT c.status AS estado, u.id AS user_id, u.name AS nombres, "
+                "u.last_name AS apellidos FROM carnets c JOIN users u ON u.id=c.user_id "
+                "WHERE c.qr_code = :codigo;"
+            ),
+            {"codigo": codigo},
+        )
     row = res.mappings().first()
     if not row:
         return {"permitido": False, "mensaje": "Carnet no encontrado", "usuario": None, "carnet_estado": None}

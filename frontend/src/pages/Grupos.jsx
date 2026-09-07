@@ -76,6 +76,7 @@ export default function Grupos() {
     setForm({ nombre: row.nombre || '', descripcion: row.descripcion || '' });
     setFormErrors({});
     setEditing(row);
+    setCreateOpen(true);
   };
 
   const save = async () => {
@@ -258,7 +259,7 @@ export default function Grupos() {
         size="sm"
         footer={
           <>
-            <Button variant="secondary" onClick={() => (editing ? setEditing(null) : setCreateOpen(false))}>
+            <Button variant="secondary" onClick={() => { setEditing(null); setCreateOpen(false); }}>
               Cancelar
             </Button>
             <Button icon={editing ? Pencil : Plus} onClick={save} loading={createGrupo.isPending || updateGrupo.isPending}>

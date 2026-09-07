@@ -29,7 +29,7 @@ export function useSubirExcel() {
   return useMutation({
     mutationFn: ({ grupo_id, file }) => {
       const form = new FormData();
-      form.append('file', file);
+      form.append('archivo', file);
       return api
         .post('/asistencia/excel', form, { params: { grupo_id } })
         .then((r) => r.data);

@@ -9,7 +9,16 @@ import Input from '../components/ui/Input';
 import StatusBadge from '../components/ui/StatusBadge';
 import cn from '../lib/cn';
 
-const getErr = (err) => err.response?.data?.detail || err.message || 'Error de conexión con el servidor';
+const getErr = (err) => {
+  const detail = err.response?.data?.detail;
+  if (Array.isArray(detail)) {
+    const primero = detail[0];
+    return primero
+      ? `${primero.msg || primero.message || 'Dato inválido'}${primero.loc ? ` (campo: ${primero.loc.join('.')})` : ''}`
+      : 'Dato inválido';
+  }
+  return detail || err.message || 'Error de conexión con el servidor';
+};
 
 export default function Validar() {
   const [mode, setMode] = useState('qr');
@@ -82,8 +91,17 @@ export default function Validar() {
             label={mode === 'qr' ? 'Código QR' : 'UUID del carnet'}
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
-            placeholder={mode === 'qr' ? 'Escanea o pega el token del QR' : 'Pega el UUID mostrado en el carnet'}
+            placeholder={
+              mode === 'qr'
+                ? 'Pega el token del QR de acceso (generado en Mi carnet)'
+                : 'Pega el UUID del carnet (cópialo desde Mi carnet)'
+            }
             icon={mode === 'qr' ? ScanLine : KeySquare}
+            hint={
+              mode === 'qr'
+                ? 'Solo valida el QR dinámico de acceso (un solo uso, expira en 15 min).'
+                : undefined
+            }
           />
           <Input
             label="Ubicación (opcional)"
@@ -91,7 +109,7 @@ export default function Validar() {
             onChange={(e) => setUbicacion(e.target.value)}
             placeholder="Ej. Entrada principal, Bloque 2"
             icon={MapPin}
-            hint="Se envía al servidor como contexto de la validación."
+            hint="Se envía al servidor como contexto de la validación (cabecera X-Ubicacion)."
           />
           <Button fullWidth icon={ShieldCheck} onClick={onValidar} loading={isPending}>
             Validar identidad

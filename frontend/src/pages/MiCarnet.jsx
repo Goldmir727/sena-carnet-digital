@@ -11,10 +11,14 @@ import {
   Check,
   ShieldCheck,
   AlertTriangle,
+  Zap,
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMiCarnet } from '../api/carnets';
 import { useUser } from '../api/users';
+import { useGenerarQrCarnet, fetchQrImageBlob } from '../api/qr';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -61,6 +65,45 @@ export default function MiCarnet() {
   const [copied, setCopied] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const qrUrlRef = useRef(null);
+
+  const generarAccess = useGenerarQrCarnet();
+  const [accessQr, setAccessQr] = useState(null);
+  const [accessUrl, setAccessUrl] = useState(null);
+  const [accessError, setAccessError] = useState(false);
+  const [accessExpires, setAccessExpires] = useState(null);
+  const [now, setNow] = useState(0);
+  const accessUrlRef = useRef(null);
+
+  useEffect(() => {
+    if (!accessExpires) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [accessExpires]);
+
+  useEffect(() => {
+    if (!accessQr?.qr_token) return;
+    let active = true;
+    fetchQrImageBlob(accessQr.qr_token)
+      .then((blob) => {
+        if (!active) return;
+        const url = URL.createObjectURL(blob);
+        if (accessUrlRef.current) URL.revokeObjectURL(accessUrlRef.current);
+        accessUrlRef.current = url;
+        setAccessUrl(url);
+      })
+      .catch(() => {
+        if (active) setAccessError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessQr?.qr_token]);
+
+  useEffect(() => {
+    return () => {
+      if (accessUrlRef.current) URL.revokeObjectURL(accessUrlRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -153,6 +196,30 @@ export default function MiCarnet() {
       toast.error('No se pudo copiar el código');
     }
   };
+
+  const onGenAccess = async () => {
+    try {
+      const res = await generarAccess.mutateAsync();
+      setAccessQr(res);
+      setAccessUrl(null);
+      setAccessError(false);
+      setNow(Date.now());
+      setAccessExpires(new Date(res.expires_at).getTime());
+      toast.success('QR de acceso generado. Caduca en 15 min o al primer uso.');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || 'No se pudo generar el QR de acceso');
+    }
+  };
+
+  const segundosRestantes = accessExpires
+    ? Math.max(0, Math.floor((accessExpires - now) / 1000))
+    : 0;
+  const tiempoAcceso =
+    segundosRestantes === 0
+      ? 'text-red-600 bg-red-50'
+      : segundosRestantes < 300
+        ? 'text-sena-ink bg-sena-yellow/15'
+        : 'text-sena-green-dark bg-sena-tint-100';
 
   return (
     <div className="space-y-6">
@@ -260,6 +327,55 @@ export default function MiCarnet() {
               <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
                 <FileText className="h-3.5 w-3.5" /> El PDF incluye este código QR para impresión
               </p>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sena-tint-100 text-sena-green">
+                <Zap className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-sena-ink">QR de acceso</h2>
+                <p className="text-xs text-slate-400">Para validar en portería</p>
+              </div>
+            </div>
+            <div className="flex flex-col items-center px-5 py-6">
+              {!accessQr ? (
+                <>
+                  <p className="mb-4 text-center text-sm text-slate-500">
+                    Genera un QR temporal de un solo uso para presentarlo ante el validador de acceso.
+                  </p>
+                  <Button fullWidth icon={Zap} onClick={onGenAccess} loading={generarAccess.isPending}>
+                    Generar QR de acceso
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-52 w-52 items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
+                    {accessUrl ? (
+                      <img src={accessUrl} alt="QR de acceso" className="h-full w-full object-contain" />
+                    ) : accessError ? (
+                      <p className="px-4 text-center text-sm text-slate-400">No se pudo cargar el QR.</p>
+                    ) : (
+                      <span className="flex h-8 w-8 animate-spin items-center justify-center rounded-full border-2 border-sena-tint-200 border-t-sena-green" />
+                    )}
+                  </div>
+                  <p className="mt-4 max-w-full truncate rounded-lg bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-500">
+                    {accessQr.qr_token}
+                  </p>
+                  <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${tiempoAcceso}`}>
+                    <Clock className="h-3.5 w-3.5" />
+                    Expira en {String(Math.floor(segundosRestantes / 60)).padStart(2, '0')}:
+                    {String(segundosRestantes % 60).padStart(2, '0')} · un solo uso
+                  </span>
+                  <div className="mt-5 w-full">
+                    <Button fullWidth variant="secondary" icon={RefreshCw} onClick={onGenAccess} loading={generarAccess.isPending}>
+                      Regenerar QR
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
         </div>

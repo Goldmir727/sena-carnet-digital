@@ -7,6 +7,7 @@ const VARIANTS = {
   blue: 'bg-blue-50 text-blue-700 border border-blue-200',
   slate: 'bg-slate-100 text-slate-600 border border-slate-200',
   outline: 'bg-white text-sena-ink border border-slate-200',
+  solid: '',
 };
 
 export default function Badge({ children, variant = 'slate', icon: Icon, className = '' }) {

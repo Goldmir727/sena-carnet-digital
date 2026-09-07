@@ -31,11 +31,14 @@ export default function Dropdown({
         <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
       ) : (
         <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-sena-ink',
             triggerClassName
           )}
           aria-label="Más opciones"
+          aria-expanded={open}
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
