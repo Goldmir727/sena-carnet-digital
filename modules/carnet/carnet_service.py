@@ -50,7 +50,8 @@ class CarnetService:
         query = text("""
             INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date, status)
             VALUES (:user_id, :qr_code, :issue_date, :expiration_date, 'Activo')
-            RETURNING id, user_id, qr_code AS codigo_qr, issue_date AS fecha_emision,
+            RETURNING id, user_id, qr_code AS uuid, qr_code AS codigo_qr,
+                      issue_date AS fecha_emision,
                       expiration_date AS fecha_vencimiento, status AS estado;
         """)
         try:
@@ -75,7 +76,10 @@ class CarnetService:
                          c.status AS estado, c.issue_date AS fecha_emision,
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
-                     u.document AS numero_documento, u.document_type AS tipo_documento
+                     u.document AS numero_documento, u.document_type AS tipo_documento,
+                     (u.name || ' ' || u.last_name) AS usuario_nombre,
+                     u.document AS usuario_documento,
+                     u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             WHERE c.user_id = :user_id
@@ -92,7 +96,10 @@ class CarnetService:
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
-                     u.photo_profile AS foto_perfil
+                     u.photo_profile AS foto_perfil,
+                     (u.name || ' ' || u.last_name) AS usuario_nombre,
+                     u.document AS usuario_documento,
+                     u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             WHERE c.qr_code = :uuid;
@@ -108,7 +115,10 @@ class CarnetService:
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
-                     u.photo_profile AS foto_perfil
+                     u.photo_profile AS foto_perfil,
+                     (u.name || ' ' || u.last_name) AS usuario_nombre,
+                     u.document AS usuario_documento,
+                     u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             WHERE c.id = :id;
@@ -128,7 +138,10 @@ class CarnetService:
                   SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
                       c.status AS estado, c.issue_date AS fecha_emision,
                       c.expiration_date AS fecha_vencimiento,
-                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento,
+                      (u.name || ' ' || u.last_name) AS usuario_nombre,
+                      u.document AS usuario_documento,
+                      u.email AS usuario_email
                 FROM carnets c
                 JOIN users u ON u.id = c.user_id
                 WHERE c.status = :estado
@@ -140,7 +153,10 @@ class CarnetService:
                   SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
                       c.status AS estado, c.issue_date AS fecha_emision,
                       c.expiration_date AS fecha_vencimiento,
-                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento,
+                      (u.name || ' ' || u.last_name) AS usuario_nombre,
+                      u.document AS usuario_documento,
+                      u.email AS usuario_email
                 FROM carnets c
                 JOIN users u ON u.id = c.user_id
                 ORDER BY c.id DESC;
@@ -168,7 +184,12 @@ class CarnetService:
             )
 
         result = await self.db.execute(
-            text("UPDATE carnets SET status = :estado WHERE id = :id RETURNING *, status AS estado;"),
+            text(
+                "UPDATE carnets SET status = :estado WHERE id = :id "
+                "RETURNING id, user_id, qr_code AS uuid, qr_code AS codigo_qr, "
+                "issue_date AS fecha_emision, expiration_date AS fecha_vencimiento, "
+                "status AS estado;"
+            ),
             {"estado": nuevo_estado, "id": carnet_id}
         )
         await self.db.commit()
