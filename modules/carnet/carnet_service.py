@@ -1,5 +1,5 @@
 import uuid as uuid_lib
-from datetime import datetime, timezone, timedelta
+from datetime import date, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,14 +27,14 @@ class CarnetService:
         logger.info(f"Generando carnet para usuario ID: {user_id}")
 
         user_check = await self.db.execute(
-            text("SELECT id, username FROM users WHERE id = :id AND is_active = TRUE;"),
+            text("SELECT id, email FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');"),
             {"id": user_id}
         )
         if not user_check.first():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado o inactivo.")
 
         existing = await self.db.execute(
-            text("SELECT id FROM carnets WHERE user_id = :uid AND estado = 'Activo';"),
+            text("SELECT id FROM carnets WHERE user_id = :uid AND status = 'Activo';"),
             {"uid": user_id}
         )
         if existing.first():
@@ -43,23 +43,22 @@ class CarnetService:
                 detail="El usuario ya tiene un carnet activo. Inactive o regenere el existente."
             )
 
-        carnet_uuid = str(uuid_lib.uuid4())
-        qr_token = generate_qr_token(carnet_uuid)
-        fecha_emision = datetime.now(timezone.utc)
-        fecha_vencimiento = fecha_emision + timedelta(days=settings.CARNET_DURATION_DAYS)
+        qr_token = generate_qr_token(str(uuid_lib.uuid4()))
+        issue_date = date.today()
+        expiration_date = issue_date + timedelta(days=settings.CARNET_DURATION_DAYS)
 
         query = text("""
-            INSERT INTO carnets (user_id, uuid, codigo_qr, estado, fecha_emision, fecha_vencimiento)
-            VALUES (:user_id, :uuid, :codigo_qr, 'Activo', :fecha_emision, :fecha_vencimiento)
-            RETURNING id, user_id, uuid, codigo_qr, estado, fecha_emision, fecha_vencimiento;
+            INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date, status)
+            VALUES (:user_id, :qr_code, :issue_date, :expiration_date, 'Activo')
+            RETURNING id, user_id, qr_code AS codigo_qr, issue_date AS fecha_emision,
+                      expiration_date AS fecha_vencimiento, status AS estado;
         """)
         try:
             result = await self.db.execute(query, {
                 "user_id": user_id,
-                "uuid": carnet_uuid,
-                "codigo_qr": qr_token,
-                "fecha_emision": fecha_emision,
-                "fecha_vencimiento": fecha_vencimiento,
+                "qr_code": qr_token,
+                "issue_date": issue_date,
+                "expiration_date": expiration_date,
             })
             await self.db.commit()
             row = dict(result.mappings().first())
@@ -72,7 +71,11 @@ class CarnetService:
 
     async def get_carnet_by_user(self, user_id: int) -> dict | None:
         query = text("""
-            SELECT c.*, u.nombres, u.apellidos, u.email, u.numero_documento, u.tipo_documento
+                     SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
+                         c.status AS estado, c.issue_date AS fecha_emision,
+                         c.expiration_date AS fecha_vencimiento,
+                         u.name AS nombres, u.last_name AS apellidos, u.email,
+                     u.document AS numero_documento, u.document_type AS tipo_documento
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             WHERE c.user_id = :user_id
@@ -84,10 +87,15 @@ class CarnetService:
 
     async def get_carnet_by_uuid(self, uuid: str) -> dict | None:
         query = text("""
-            SELECT c.*, u.nombres, u.apellidos, u.email, u.numero_documento, u.tipo_documento, u.foto_perfil
+                     SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
+                         c.status AS estado, c.issue_date AS fecha_emision,
+                         c.expiration_date AS fecha_vencimiento,
+                         u.name AS nombres, u.last_name AS apellidos, u.email,
+                     u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.photo_profile AS foto_perfil
             FROM carnets c
             JOIN users u ON u.id = c.user_id
-            WHERE c.uuid = :uuid;
+            WHERE c.qr_code = :uuid;
         """)
         result = await self.db.execute(query, {"uuid": uuid})
         row = result.mappings().first()
@@ -95,7 +103,12 @@ class CarnetService:
 
     async def get_carnet_by_id(self, carnet_id: int) -> dict:
         query = text("""
-            SELECT c.*, u.nombres, u.apellidos, u.email, u.numero_documento, u.tipo_documento, u.foto_perfil
+                     SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
+                         c.status AS estado, c.issue_date AS fecha_emision,
+                         c.expiration_date AS fecha_vencimiento,
+                         u.name AS nombres, u.last_name AS apellidos, u.email,
+                     u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.photo_profile AS foto_perfil
             FROM carnets c
             JOIN users u ON u.id = c.user_id
             WHERE c.id = :id;
@@ -112,16 +125,22 @@ class CarnetService:
 
         if estado:
             query = text("""
-                SELECT c.*, u.nombres, u.apellidos, u.numero_documento
+                  SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
+                      c.status AS estado, c.issue_date AS fecha_emision,
+                      c.expiration_date AS fecha_vencimiento,
+                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
                 FROM carnets c
                 JOIN users u ON u.id = c.user_id
-                WHERE c.estado = :estado
+                WHERE c.status = :estado
                 ORDER BY c.id DESC;
             """)
             result = await self.db.execute(query, {"estado": estado})
         else:
             query = text("""
-                SELECT c.*, u.nombres, u.apellidos, u.numero_documento
+                  SELECT c.id, c.user_id, c.qr_code AS uuid, c.qr_code AS codigo_qr,
+                      c.status AS estado, c.issue_date AS fecha_emision,
+                      c.expiration_date AS fecha_vencimiento,
+                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
                 FROM carnets c
                 JOIN users u ON u.id = c.user_id
                 ORDER BY c.id DESC;
@@ -134,7 +153,7 @@ class CarnetService:
         logger.info(f"Cambiando estado del carnet {carnet_id} a {nuevo_estado}")
 
         current = await self.db.execute(
-            text("SELECT id, estado FROM carnets WHERE id = :id;"),
+            text("SELECT id, status AS estado FROM carnets WHERE id = :id;"),
             {"id": carnet_id}
         )
         row = current.mappings().first()
@@ -149,7 +168,7 @@ class CarnetService:
             )
 
         result = await self.db.execute(
-            text("UPDATE carnets SET estado = :estado WHERE id = :id RETURNING *;"),
+            text("UPDATE carnets SET status = :estado WHERE id = :id RETURNING *, status AS estado;"),
             {"estado": nuevo_estado, "id": carnet_id}
         )
         await self.db.commit()
@@ -159,7 +178,7 @@ class CarnetService:
         logger.info(f"Regenerando carnet para usuario ID: {user_id}")
 
         await self.db.execute(
-            text("UPDATE carnets SET estado = 'Inactivo' WHERE user_id = :uid AND estado = 'Activo';"),
+            text("UPDATE carnets SET status = 'Inactivo' WHERE user_id = :uid AND status = 'Activo';"),
             {"uid": user_id}
         )
         await self.db.commit()
@@ -167,9 +186,9 @@ class CarnetService:
         return await self.generate_carnet(user_id)
 
     async def check_expired(self) -> int:
-        now = datetime.now(timezone.utc)
+        now = date.today()
         result = await self.db.execute(
-            text("UPDATE carnets SET estado = 'Vencido' WHERE estado = 'Activo' AND fecha_vencimiento < :now RETURNING id;"),
+            text("UPDATE carnets SET status = 'Vencido' WHERE status = 'Activo' AND expiration_date < :now RETURNING id;"),
             {"now": now}
         )
         await self.db.commit()

@@ -13,9 +13,7 @@ class ValidationService:
     async def validate_qr(self, qr_token: str, ubicacion: str | None = None) -> dict:
         logger.info("Validando token QR")
 
-        user_uuid = verify_qr_token(qr_token)
-        if not user_uuid:
-            await self._log_access(None, "DENEGADO", "Token QR inválido o corrupto")
+        if not verify_qr_token(qr_token):
             return {
                 "permitido": False,
                 "mensaje": "Acceso Denegado - Token QR inválido o corrupto",
@@ -24,18 +22,18 @@ class ValidationService:
             }
 
         query = text("""
-            SELECT c.id as carnet_id, c.estado, c.uuid,
-                   u.id as user_id, u.nombres, u.apellidos, u.numero_documento,
-                   u.tipo_documento, u.foto_perfil
+                 SELECT c.id as carnet_id, c.status AS estado, c.qr_code AS uuid,
+                     u.id as user_id, u.name AS nombres, u.last_name AS apellidos,
+                     u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.photo_profile AS foto_perfil
             FROM carnets c
             JOIN users u ON u.id = c.user_id
-            WHERE c.uuid = :uuid;
+            WHERE c.qr_code = :uuid;
         """)
-        result = await self.db.execute(query, {"uuid": user_uuid})
+        result = await self.db.execute(query, {"uuid": qr_token})
         carnet = result.mappings().first()
 
         if not carnet:
-            await self._log_access(None, "DENEGADO", "Carnet no encontrado en el sistema")
             return {
                 "permitido": False,
                 "mensaje": "Acceso Denegado - Carnet no registrado en el sistema",
@@ -45,7 +43,6 @@ class ValidationService:
 
         if carnet["estado"] != "Activo":
             mensaje = f"Acceso Denegado - Carnet {carnet['estado']}"
-            await self._log_access(carnet["user_id"], "DENEGADO", mensaje)
             return {
                 "permitido": False,
                 "mensaje": mensaje,
@@ -55,10 +52,6 @@ class ValidationService:
                 },
                 "carnet_estado": carnet["estado"]
             }
-
-        await self._log_access(carnet["user_id"], "PERMITIDO", "Acceso concedido", ubicacion)
-
-        await self._register_attendance(carnet["user_id"], ubicacion)
 
         return {
             "permitido": True,
@@ -74,38 +67,3 @@ class ValidationService:
             "carnet_estado": "Activo"
         }
 
-    async def _log_access(self, user_id: int | None, resultado: str, mensaje: str, ubicacion: str | None = None) -> None:
-        try:
-            await self.db.execute(
-                text("""
-                    INSERT INTO access_logs (user_id, resultado, mensaje, ubicacion, timestamp)
-                    VALUES (:user_id, :resultado, :mensaje, :ubicacion, :timestamp);
-                """),
-                {
-                    "user_id": user_id,
-                    "resultado": resultado,
-                    "mensaje": mensaje,
-                    "ubicacion": ubicacion,
-                    "timestamp": datetime.now(timezone.utc)
-                }
-            )
-            await self.db.commit()
-        except Exception as e:
-            logger.error(f"Error al registrar log de acceso: {str(e)}")
-
-    async def _register_attendance(self, user_id: int, ubicacion: str | None) -> None:
-        try:
-            await self.db.execute(
-                text("""
-                    INSERT INTO asistencias (user_id, fecha_hora, ubicacion)
-                    VALUES (:user_id, :fecha_hora, :ubicacion);
-                """),
-                {
-                    "user_id": user_id,
-                    "fecha_hora": datetime.now(timezone.utc),
-                    "ubicacion": ubicacion
-                }
-            )
-            await self.db.commit()
-        except Exception as e:
-            logger.error(f"Error al registrar asistencia: {str(e)}")

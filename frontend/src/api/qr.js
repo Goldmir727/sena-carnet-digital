@@ -14,8 +14,10 @@ export function useGenerarQrClase() {
   });
 }
 
+const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 export function qrImageUrl(token) {
-  return `/qr/carnet/image?token=${encodeURIComponent(token)}`;
+  return `${BASE}/qr/carnet/image?token=${encodeURIComponent(token)}`;
 }
 
 export async function fetchQrImageBlob(token) {

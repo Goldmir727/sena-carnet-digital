@@ -3,6 +3,7 @@ export default function Button({
   variant = 'primary',
   type = 'button',
   loading = false,
+  disabled = false,
   className = '',
   ...props
 }) {
@@ -16,8 +17,8 @@ export default function Button({
   return (
     <button
       type={type}
-      disabled={loading || props.disabled}
       className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
+      disabled={loading || disabled}
       {...props}
     >
       {loading && (

@@ -46,6 +46,8 @@ async function downloadBlob(url, fallbackName) {
   URL.revokeObjectURL(link.href);
 }
 
+const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 export function exportReporte(tipo, formato) {
-  return downloadBlob(`/reports/export/${formato}?tipo=${encodeURIComponent(tipo)}`, `reporte_${tipo}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`);
+  return downloadBlob(`${BASE}/reports/export/${formato}?tipo=${encodeURIComponent(tipo)}`, `reporte_${tipo}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`);
 }

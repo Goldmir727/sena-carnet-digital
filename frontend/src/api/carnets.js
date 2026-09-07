@@ -48,10 +48,12 @@ export function useCambiarEstadoCarnet() {
   });
 }
 
+const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 export function carnetQrUrl(id) {
-  return `/carnets/${id}/qr`;
+  return `${BASE}/carnets/${id}/qr`;
 }
 
 export function carnetPdfUrl(id) {
-  return `/carnets/${id}/pdf`;
+  return `${BASE}/carnets/${id}/pdf`;
 }

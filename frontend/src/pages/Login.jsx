@@ -94,7 +94,7 @@ function CredentialsStep({ onLoginSuccess }) {
         disabled={loading || !username || !password}
         className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sena-green-dark disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? <Spinner /> : 'Continuar'}
+        {loading ? <Spinner size="sm" /> : 'Continuar'}
       </button>
 
       <p className="text-center text-sm text-slate-600">
@@ -173,7 +173,7 @@ function TwoFactorStep({ loginInfo, onBack }) {
         disabled={loading || code.length !== 6}
         className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sena-green-dark disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? <Spinner /> : 'Verificar y entrar'}
+        {loading ? <Spinner size="sm" /> : 'Verificar y entrar'}
       </button>
 
       <p className="text-center text-sm text-slate-600">

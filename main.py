@@ -10,9 +10,6 @@ from modules.carnet.carnet_router import router as carnet_router
 from modules.validation.validation_router import router as validation_router
 from modules.attendance.attendance_router import router as attendance_router
 from modules.reports.reports_router import router as reports_router
-from modules.grupos.grupo_router import router as grupo_router
-from modules.qr.qr_router import router as qr_router
-from modules.asistencia.asistencia_router import router as asistencia_router
 from core.logger import logger
 
 
@@ -20,7 +17,7 @@ from core.logger import logger
 async def lifespan(app: FastAPI):
     logger.info("==========================================================")
     logger.info("  Sistema de Gestión de Carnets - API Inicializada")
-    logger.info("  Documentación interactiva: http://127.0.0.1:8000/docs")
+    logger.info("  Documentación interactiva: http://127.0.0.1:8001/docs")
     logger.info("==========================================================")
     yield
     logger.info("Cerrando recursos de la API de forma segura.")
@@ -52,9 +49,6 @@ app.include_router(carnet_router)
 app.include_router(validation_router)
 app.include_router(attendance_router)
 app.include_router(reports_router)
-app.include_router(grupo_router)
-app.include_router(qr_router)
-app.include_router(asistencia_router)
 
 import os
 from core.config import settings
