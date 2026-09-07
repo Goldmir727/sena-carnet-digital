@@ -6,6 +6,14 @@ import Login from '../pages/Login';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
 import Dashboard from '../pages/Dashboard';
+import MiCarnet from '../pages/MiCarnet';
+import Usuarios from '../pages/Usuarios';
+import Grupos from '../pages/Grupos';
+import Carnets from '../pages/Carnets';
+import Asistencia from '../pages/Asistencia';
+import RegistrarAsistencia from '../pages/RegistrarAsistencia';
+import Reportes from '../pages/Reportes';
+import Validar from '../pages/Validar';
 import NotFound from '../pages/NotFound';
 import ModulePlaceholder from '../pages/ModulePlaceholder';
 
@@ -24,7 +32,7 @@ export default function AppRouter() {
             path="mi-carnet"
             element={
               <PermissionRoute permission="carnet.view">
-                <ModulePlaceholder title="Mi carnet" />
+                <MiCarnet />
               </PermissionRoute>
             }
           />
@@ -32,7 +40,7 @@ export default function AppRouter() {
             path="usuarios"
             element={
               <PermissionRoute permission="users.read">
-                <ModulePlaceholder title="Usuarios" />
+                <Usuarios />
               </PermissionRoute>
             }
           />
@@ -40,7 +48,7 @@ export default function AppRouter() {
             path="grupos"
             element={
               <PermissionRoute permission="grupos.read">
-                <ModulePlaceholder title="Grupos" />
+                <Grupos />
               </PermissionRoute>
             }
           />
@@ -48,7 +56,7 @@ export default function AppRouter() {
             path="carnets"
             element={
               <PermissionRoute permission="carnet.write">
-                <ModulePlaceholder title="Gestión de carnets" />
+                <Carnets />
               </PermissionRoute>
             }
           />
@@ -56,7 +64,7 @@ export default function AppRouter() {
             path="asistencia"
             element={
               <PermissionRoute permission="asistencia.grupo.read">
-                <ModulePlaceholder title="Asistencia" />
+                <Asistencia />
               </PermissionRoute>
             }
           />
@@ -64,7 +72,7 @@ export default function AppRouter() {
             path="escanear-clase"
             element={
               <PermissionRoute permission="asistencia.escanear">
-                <ModulePlaceholder title="Registrar asistencia" />
+                <RegistrarAsistencia />
               </PermissionRoute>
             }
           />
@@ -80,7 +88,7 @@ export default function AppRouter() {
             path="reportes"
             element={
               <PermissionRoute permission="reports.view">
-                <ModulePlaceholder title="Reportes" />
+                <Reportes />
               </PermissionRoute>
             }
           />
@@ -88,7 +96,7 @@ export default function AppRouter() {
             path="validar"
             element={
               <PermissionRoute permission="validar.qr">
-                <ModulePlaceholder title="Validar acceso" />
+                <Validar />
               </PermissionRoute>
             }
           />
