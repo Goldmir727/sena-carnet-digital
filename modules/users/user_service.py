@@ -260,6 +260,13 @@ class UserService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="El número de documento ya está registrado.",
                 )
+        else:
+            # Sin documento, se usa el username como documento: validar unicidad igual
+            if await self._document_exists(user_data.username):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El nombre de usuario ya está registrado.",
+                )
 
         if not await self._role_exists(user_data.role_id):
             raise HTTPException(

@@ -50,11 +50,11 @@ class ReportsService:
 
     async def report_asistencias(self, limit: int = 500) -> list[dict]:
         query = text("""
-                 SELECT a.id, a.time AS fecha_hora, a.observations AS ubicacion,
+                 SELECT a.id, a.fecha_hora, a.ubicacion,
                      u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
             FROM asistencias a
             JOIN users u ON u.id = a.user_id
-            ORDER BY a.time DESC
+            ORDER BY a.fecha_hora DESC
             LIMIT :limit;
         """)
         result = await self.db.execute(query, {"limit": limit})
