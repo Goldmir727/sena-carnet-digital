@@ -1,17 +1,214 @@
 @import "tailwindcss";
 
 @theme {
+  /* ===== Paleta institucional SENA (tokens canónicos) ===== */
   --color-sena-green: #0F7A4D;
   --color-sena-green-dark: #0A5A39;
   --color-sena-green-light: #E8F5EE;
   --color-sena-yellow: #F2B43A;
   --color-sena-bg: #F8FAFC;
   --color-sena-ink: #17212B;
+
+  /* ===== Tints derivados de la identidad (verde mezclado sobre neutros) ===== */
+  --color-sena-tint-50: #F1FAF6;
+  --color-sena-tint-100: #E4F3EC;
+  --color-sena-tint-200: #CDE8DA;
+  --color-sena-tint-300: #9FD6BA;
+  --color-sena-tint-400: #5DB890;
+
+  /* ===== Superficies neutras de fondo (canvas profundo) ===== */
+  --color-canvas: #F3F6F4;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F7F9F8;
+  --color-ink-soft: #44525F;
+
+  /* Sombra institucional suave del acento sena-green */
+  --color-sena-glow: rgba(15, 122, 77, 0.18);
+
+  /* ===== Tipografía ===== */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* ===== Radios (jerarquía real, no todo igual) ===== */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2.25rem;
+  --radius-pill: 9999px;
+
+  /* ===== Elevación ===== */
+  --shadow-xs: 0 1px 2px rgba(23, 33, 43, 0.04);
+  --shadow-soft: 0 1px 2px rgba(23, 33, 43, 0.04), 0 3px 10px rgba(23, 33, 43, 0.05);
+  --shadow-card: 0 1px 3px rgba(23, 33, 43, 0.05), 0 6px 16px rgba(23, 33, 43, 0.06);
+  --shadow-raised: 0 4px 12px rgba(23, 33, 43, 0.06), 0 16px 32px rgba(23, 33, 43, 0.10);
+  --shadow-overlay: 0 12px 24px rgba(23, 33, 43, 0.10), 0 32px 64px rgba(23, 33, 43, 0.16);
+  --shadow-glow: 0 8px 20px rgba(15, 122, 77, 0.18), 0 18px 40px rgba(15, 122, 77, 0.12);
+
+  /* ===== Microanimaciones intencionales y sin parpadeo ===== */
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-down: fade-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scale-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-in-right: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-float-soft: float-soft 7s ease-in-out infinite;
+  --animate-drift: drift 18s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  /* Flotación muy lenta y suave (sin parpadeo) */
+  @keyframes float-soft {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  /* Desplazamiento lento de formas abstractas de fondo */
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(24px, -18px) scale(1.06); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
 }
 
 @layer base {
+  /* ===== Fundación: canvas con profundidad sutil, sin overflow horizontal ===== */
+  html {
+    scroll-behavior: smooth;
+    /* Evita scrollbar horizontal sin romper position:sticky (clip no crea scroll container) */
+    overflow-x: clip;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
-    @apply bg-sena-bg text-sena-ink antialiased;
+    @apply bg-canvas text-sena-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Anular el ping por defecto para evitar "blinking UI" en indicadores */
+  @keyframes ping {
+    75%, 100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-sena-green);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-sena-tint-200);
+    color: var(--color-sena-green-dark);
+  }
+}
+
+@layer utilities {
+  /* Scrollbar sutil */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-sena-tint-400) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-sena-tint-400);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* ===== Texto con degradado institucional ===== */
+  .text-sena-gradient {
+    background: linear-gradient(115deg, var(--color-sena-green) 0%, #13925b 55%, var(--color-sena-green-dark) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ===== Gradiente institucional (superficies destacadas) ===== */
+  .bg-sena-hero {
+    background: radial-gradient(120% 120% at 15% 0%, #1a9a63 0%, var(--color-sena-green) 48%, var(--color-sena-green-dark) 100%);
+  }
+
+  /* ===== Gradiente de texto tenue para "sellos" ===== */
+  .bg-sena-ink-fade {
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0));
+  }
+
+  /* ===== Superficie sunken (hundida) para zonas de lectura ===== */
+  .surface-sunken {
+    background: linear-gradient(180deg, var(--color-sena-tint-100), var(--color-sena-tint-50));
+    border: 1px solid var(--color-sena-tint-200);
+  }
+
+  /* ===== Protect contra desbordes horizontales ===== */
+  .min-w-0-important {
+    min-width: 0;
+  }
+
+  /* Calma el parpadeo de cualquier elemento con opacidad animada por defecto */
+  .pulse-calm {
+    animation: pulse-calm 3s ease-in-out infinite;
+  }
+  @keyframes pulse-calm {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  /* ===== Barra de navegación flotante (dock) ===== */
+  .bg-sena-dock {
+    background: linear-gradient(
+      100deg,
+      var(--color-sena-green-dark) 0%,
+      var(--color-sena-green) 55%,
+      var(--color-sena-green-dark) 100%
+    );
+  }
+
+  /* Scrollbar oculta pero con scroll funcional (para el dock en móvil) */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ===== Resplandor suave de tarjeta institucional ===== */
+  .shadow-own-glow {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 12px 32px rgba(10, 90, 57, 0.35),
+                0 4px 12px rgba(10, 90, 57, 0.25);
   }
 }

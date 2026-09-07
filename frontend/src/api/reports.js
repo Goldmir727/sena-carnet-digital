@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import api from './client';
 import { getAccessToken } from '../utils/session';
 
-export function useReporteEstadisticas() {
+export function useReporteEstadisticas({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['reports', 'estadisticas'],
     queryFn: async () => (await api.get('/reports/estadisticas')).data,
+    enabled,
   });
 }
 
