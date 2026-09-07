@@ -14,8 +14,8 @@ import Asistencia from '../pages/Asistencia';
 import RegistrarAsistencia from '../pages/RegistrarAsistencia';
 import Reportes from '../pages/Reportes';
 import Validar from '../pages/Validar';
+import QrClase from '../pages/QrClase';
 import NotFound from '../pages/NotFound';
-import ModulePlaceholder from '../pages/ModulePlaceholder';
 
 export default function AppRouter() {
   return (
@@ -80,7 +80,7 @@ export default function AppRouter() {
             path="qr-clase"
             element={
               <PermissionRoute permission="qr.clase">
-                <ModulePlaceholder title="QR de clase" />
+                <QrClase />
               </PermissionRoute>
             }
           />
