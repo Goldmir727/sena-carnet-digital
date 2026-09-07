@@ -3,6 +3,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from PIL import Image
 from services.qr_service import generate_qr_image
 
 
@@ -29,7 +31,25 @@ def generar_carnet_pdf(user: dict, carnet: dict, qr_token: str) -> BytesIO:
     c.drawString(25*mm, y - 20*mm, f"Válido hasta: {carnet.get('fecha_vencimiento', '')}")
 
     qr_img = generate_qr_image(qr_token)
-    c.drawImage(qr_img, 140*mm, y - 25*mm, width=25*mm, height=25*mm)
+    c.drawImage(ImageReader(qr_img), 140*mm, y - 25*mm, width=25*mm, height=25*mm)
+
+    foto = (user.get('foto_perfil') or '').replace("\\", "/")
+    if foto:
+        try:
+            with Image.open(foto) as photo:
+                photo.load()
+                c.drawImage(
+                    ImageReader(photo.convert("RGB")),
+                    112*mm, y - 25*mm,
+                    width=22*mm, height=25*mm,
+                    preserveAspectRatio=True,
+                    anchor='c',
+                )
+            c.setStrokeColor(HexColor("#cbd5e1"))
+            c.setLineWidth(0.75)
+            c.rect(112*mm, y - 25*mm, 22*mm, 25*mm)
+        except Exception:
+            pass
 
     c.showPage()
     c.save()

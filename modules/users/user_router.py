@@ -213,7 +213,9 @@ async def upload_foto(
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
     filename = f"user_{user_id}{ext}"
-    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    # Ruta relativa con forward slashes: sirve como URL (/uploads/...) y como ruta en disco
+    upload_dir_url = settings.UPLOAD_DIR.replace("\\", "/")
+    filepath = f"{upload_dir_url}/{filename}"
 
     with open(filepath, "wb") as f:
         f.write(contents)

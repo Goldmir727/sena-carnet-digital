@@ -80,4 +80,4 @@ app.include_router(qr_router)
 import os
 from core.config import settings
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/uploads/fotos", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

@@ -101,6 +101,7 @@ async def download_carnet_pdf(
         "email": carnet.get("email"),
         "tipo_documento": carnet.get("tipo_documento"),
         "numero_documento": carnet.get("numero_documento"),
+        "foto_perfil": carnet.get("foto_perfil"),
     }
     pdf_buffer = generar_carnet_pdf(user, carnet, carnet["codigo_qr"])
     return Response(

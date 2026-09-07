@@ -27,8 +27,26 @@ import Dropdown from '../components/ui/Dropdown';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
 
-function Avatar({ initials, size = 'md' }) {
+const MEDIA_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+function photoUrl(foto) {
+  if (!foto) return null;
+  if (/^https?:\/\//i.test(foto)) return foto;
+  const clean = foto.replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${MEDIA_BASE}/${clean}`;
+}
+
+function Avatar({ initials, size = 'md', src }) {
   const sizes = { md: 'h-10 w-10 text-sm', xl: 'h-20 w-20 text-2xl' };
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={initials}
+        className={`shrink-0 rounded-full bg-sena-green object-cover ring-2 ring-sena-tint-100 ${sizes[size]}`}
+      />
+    );
+  }
   return (
     <div
       className={`flex shrink-0 items-center justify-center rounded-full bg-sena-green font-bold text-white shadow-soft ${sizes[size]}`}
@@ -92,7 +110,28 @@ export default function Usuarios() {
   const [editing, setEditing] = useState(null);
   const [photoTarget, setPhotoTarget] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [confirmRow, setConfirmRow] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const closePhoto = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPhotoFile(null);
+    setPhotoTarget(null);
+  };
+
+  const onPickFile = (e) => {
+    const file = e.target.files?.[0] || null;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(file ? URL.createObjectURL(file) : null);
+    setPhotoFile(file);
+  };
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target ? e.target.value : e }));
 
@@ -190,8 +229,7 @@ export default function Usuarios() {
     try {
       await uploadPhoto.mutateAsync({ id: photoTarget.id, file: photoFile });
       toast.success('Foto actualizada');
-      setPhotoTarget(null);
-      setPhotoFile(null);
+      closePhoto();
     } catch (e) {
       toast.error(getErr(e));
     }
@@ -207,6 +245,7 @@ export default function Usuarios() {
         <div className="flex items-center gap-3">
           <Avatar
             size="md"
+            src={photoUrl(r.foto_perfil)}
             initials={initials(r.nombres || r.name, r.apellidos || r.last_name, r.email || r.username)}
           />
           <div className="min-w-0">
@@ -376,22 +415,13 @@ export default function Usuarios() {
 
       <Modal
         open={!!photoTarget}
-        onClose={() => {
-          setPhotoTarget(null);
-          setPhotoFile(null);
-        }}
+        onClose={closePhoto}
         title="Foto de perfil"
         description="Esta foto aparece impresa en el carnet digital."
         size="sm"
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setPhotoTarget(null);
-                setPhotoFile(null);
-              }}
-            >
+            <Button variant="secondary" onClick={closePhoto}>
               Cancelar
             </Button>
             <Button icon={Camera} onClick={onUploadPhoto} loading={uploadPhoto.isPending} disabled={!photoFile}>
@@ -401,14 +431,25 @@ export default function Usuarios() {
         }
       >
         <div className="flex flex-col items-center gap-4">
-          <Avatar
-            size="xl"
-            initials={initials(photoTarget?.nombres || photoTarget?.name, photoTarget?.apellidos || photoTarget?.last_name, photoTarget?.email)}
-          />
+          {previewUrl || photoUrl(photoTarget?.foto_perfil) ? (
+            <img
+              src={previewUrl || photoUrl(photoTarget?.foto_perfil)}
+              alt={initials(photoTarget?.nombres || photoTarget?.name, photoTarget?.apellidos || photoTarget?.last_name, photoTarget?.email)}
+              className="h-24 w-24 rounded-full object-cover shadow-soft ring-4 ring-sena-tint-100"
+            />
+          ) : (
+            <Avatar
+              size="xl"
+              initials={initials(photoTarget?.nombres || photoTarget?.name, photoTarget?.apellidos || photoTarget?.last_name, photoTarget?.email)}
+            />
+          )}
+          {previewUrl ? (
+            <p className="text-xs font-medium text-sena-green-dark">Vista previa de la imagen seleccionada</p>
+          ) : null}
           <input
             type="file"
             accept="image/*"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+            onChange={onPickFile}
             className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-sena-tint-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-sena-green-dark hover:file:bg-sena-tint-200"
           />
         </div>
