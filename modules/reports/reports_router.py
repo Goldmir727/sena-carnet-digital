@@ -31,10 +31,16 @@ async def report_carnets(
 
 @router.get("/asistencias", status_code=status.HTTP_200_OK)
 async def report_asistencias(
+    grupo_id: int | None = Query(None, description="Filtrar por grupo"),
+    desde: str | None = Query(None, description="YYYY-MM-DD"),
+    hasta: str | None = Query(None, description="YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user)
 ):
     service = ReportsService(db)
+    # RF-20 con filtros; sin filtros mantiene comportamiento legacy
+    if grupo_id is not None or desde is not None or hasta is not None:
+        return await service.report_asistencias_filtrado(grupo_id, desde, hasta)
     return await service.report_asistencias()
 
 

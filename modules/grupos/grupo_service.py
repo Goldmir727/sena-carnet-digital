@@ -38,7 +38,7 @@ class GrupoService:
         logger.info("Consultando todos los grupos.")
         query = text("""
             SELECT g.id, g.nombre, g.descripcion, g.created_at,
-                   u.id AS coordinador_id, u.username AS coordinador_username,
+                   u.id AS coordinador_id, u.email AS coordinador_username,
                    u.email AS coordinador_email
             FROM grupos g
             LEFT JOIN users u ON u.id = g.coordinador_id
@@ -51,7 +51,7 @@ class GrupoService:
         logger.info(f"Consultando grupo ID: {grupo_id}")
         query = text("""
             SELECT g.id, g.nombre, g.descripcion, g.created_at,
-                   u.id AS coordinador_id, u.username AS coordinador_username,
+                   u.id AS coordinador_id, u.email AS coordinador_username,
                    u.email AS coordinador_email
             FROM grupos g
             LEFT JOIN users u ON u.id = g.coordinador_id
@@ -353,12 +353,12 @@ class GrupoService:
             )
 
         query = text("""
-            SELECT u.id, u.username, u.email, u.nombres, u.apellidos,
-                   u.tipo_documento, u.numero_documento
+            SELECT u.id, u.email AS username, u.email, u.name AS nombres, u.last_name AS apellidos,
+                   u.document_type AS tipo_documento, u.document AS numero_documento
             FROM users u
             INNER JOIN grupo_estudiantes ge ON ge.user_id = u.id
             WHERE ge.grupo_id = :grupo_id
-            ORDER BY u.apellidos ASC, u.nombres ASC;
+            ORDER BY u.last_name ASC, u.name ASC;
         """)
         result = await self.db.execute(query, {"grupo_id": grupo_id})
         return [dict(row) for row in result.mappings().all()]
@@ -372,12 +372,12 @@ class GrupoService:
             )
 
         query = text("""
-            SELECT u.id, u.username, u.email, u.nombres, u.apellidos,
-                   u.tipo_documento, u.numero_documento
+            SELECT u.id, u.email AS username, u.email, u.name AS nombres, u.last_name AS apellidos,
+                   u.document_type AS tipo_documento, u.document AS numero_documento
             FROM users u
             INNER JOIN grupo_docentes gd ON gd.user_id = u.id
             WHERE gd.grupo_id = :grupo_id
-            ORDER BY u.apellidos ASC, u.nombres ASC;
+            ORDER BY u.last_name ASC, u.name ASC;
         """)
         result = await self.db.execute(query, {"grupo_id": grupo_id})
         return [dict(row) for row in result.mappings().all()]

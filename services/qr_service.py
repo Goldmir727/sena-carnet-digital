@@ -32,8 +32,31 @@ def verify_qr_token(token: str) -> str | None:
             return None
 
         data = json.loads(message.decode("utf-8"))
-        return data.get("uuid")
+        # Soporta tokens de carnet nuevos (user_id) y legacy (uuid),
+        # y tokens de clase (grupo_id/docente_id).
+        return data.get("uuid") or (
+            str(data.get("user_id")) if data.get("user_id") is not None else None
+        ) or (
+            str(data.get("grupo_id")) if data.get("type") == "clase" else None
+        )
     except (ValueError, json.JSONDecodeError, Exception):
+        return None
+
+
+def decode_qr_payload(token: str) -> dict | None:
+    """Verifica firma HMAC y retorna el payload completo, o None si inválido."""
+    try:
+        payload_b64, signature = token.split(".", 1)
+        message = base64.urlsafe_b64decode(payload_b64)
+        expected_sig = hmac.new(
+            settings.QR_SECRET.encode("utf-8"),
+            message,
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+        return json.loads(message.decode("utf-8"))
+    except Exception:
         return None
 
 
