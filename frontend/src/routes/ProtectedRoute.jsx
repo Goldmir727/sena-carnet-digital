@@ -1,12 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import Spinner from '../components/common/Spinner';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ProtectedRoute() {
   const { accessToken, user } = useAuth();
 
   if (!accessToken) return <Navigate to="/login" replace />;
-  if (!user) return <Spinner fullScreen />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return <Outlet />;
 }

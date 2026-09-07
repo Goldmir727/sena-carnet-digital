@@ -51,7 +51,7 @@ export default function ForgotPassword() {
               disabled={loading || !email}
               className="flex w-full items-center justify-center rounded-lg bg-sena-green px-4 py-2.5 text-sm font-semibold text-white hover:bg-sena-green-dark disabled:opacity-60"
             >
-              {loading ? <Spinner /> : 'Enviar instrucciones'}
+              {loading ? <Spinner size="sm" /> : 'Enviar instrucciones'}
             </button>
             <p className="text-center text-sm">
               <Link to="/login" className="inline-flex items-center gap-1 text-slate-600 hover:text-sena-ink">

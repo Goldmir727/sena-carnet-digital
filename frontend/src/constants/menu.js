@@ -17,7 +17,8 @@ export const MENU_ITEMS = [
   { to: '/grupos', label: 'Grupos', icon: Network, permission: 'grupos.read' },
   { to: '/carnets', label: 'Gestión de carnets', icon: CreditCard, permission: 'carnet.write' },
   { to: '/asistencia', label: 'Asistencia', icon: ClipboardCheck, permission: 'asistencia.grupo.read' },
-  { to: '/escanear-clase', label: 'Registrar asistencia', icon: QrCode, permission: 'asistencia.escanear' },
+  { to: '/qr-clase', label: 'QR de clase', icon: QrCode, permission: 'qr.clase' },
+  { to: '/escanear-clase', label: 'Registrar asistencia', icon: ScanLine, permission: 'asistencia.escanear' },
   { to: '/reportes', label: 'Reportes', icon: FileBarChart2, permission: 'reports.view' },
   { to: '/validar', label: 'Validar acceso', icon: ScanLine, permission: 'validar.qr' },
 ];

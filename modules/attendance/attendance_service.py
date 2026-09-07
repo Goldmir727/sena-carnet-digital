@@ -10,7 +10,11 @@ class AttendanceService:
 
     async def get_all(self, limit: int = 100, offset: int = 0) -> list[dict]:
         query = text("""
-            SELECT a.*, u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+            SELECT a.id, a.user_id, a.time AS fecha_hora, a.observations AS ubicacion,
+                   (u.name || ' ' || u.last_name) AS usuario_nombre,
+                   u.document AS usuario_documento,
+                   u.name AS nombres, u.last_name AS apellidos,
+                   u.document AS numero_documento
             FROM asistencias a
             JOIN users u ON u.id = a.user_id
             ORDER BY a.time DESC
@@ -21,7 +25,11 @@ class AttendanceService:
 
     async def get_by_user(self, user_id: int, limit: int = 50) -> list[dict]:
         query = text("""
-            SELECT a.*, u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+            SELECT a.id, a.user_id, a.time AS fecha_hora, a.observations AS ubicacion,
+                   (u.name || ' ' || u.last_name) AS usuario_nombre,
+                   u.document AS usuario_documento,
+                   u.name AS nombres, u.last_name AS apellidos,
+                   u.document AS numero_documento
             FROM asistencias a
             JOIN users u ON u.id = a.user_id
             WHERE a.user_id = :user_id
@@ -33,7 +41,11 @@ class AttendanceService:
 
     async def get_by_date_range(self, desde: datetime, hasta: datetime) -> list[dict]:
         query = text("""
-            SELECT a.*, u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento
+            SELECT a.id, a.user_id, a.time AS fecha_hora, a.observations AS ubicacion,
+                   (u.name || ' ' || u.last_name) AS usuario_nombre,
+                   u.document AS usuario_documento,
+                   u.name AS nombres, u.last_name AS apellidos,
+                   u.document AS numero_documento
             FROM asistencias a
             JOIN users u ON u.id = a.user_id
             WHERE a.time BETWEEN :desde AND :hasta

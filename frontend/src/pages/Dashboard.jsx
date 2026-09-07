@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Users, Network, IdCard, FileBarChart2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { hasPermission } from '../constants/permissions';
 import { ROLE_BADGE_STYLES } from '../constants/roles';
 

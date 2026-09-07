@@ -160,14 +160,25 @@ class GrupoService:
 
         grupo = await self.get_by_id(grupo_id)
 
-        asistencias_check = await self.db.execute(
-            text("SELECT 1 FROM asistencias WHERE grupo_id = :id LIMIT 1"),
-            {"id": grupo_id},
-        )
-        if asistencias_check.first() is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No se puede eliminar el grupo porque tiene asistencias registradas.",
+        # La columna asistencias.grupo_id solo existe si se aplicó la migración 003.
+        # Si la BD aún tiene el esquema viejo (session_id/event_id), no bloquear.
+        try:
+            asistencias_check = await self.db.execute(
+                text("SELECT 1 FROM asistencias WHERE grupo_id = :id LIMIT 1"),
+                {"id": grupo_id},
+            )
+            if asistencias_check.first() is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No se puede eliminar el grupo porque tiene asistencias registradas.",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            await self.db.rollback()
+            logger.warning(
+                "asistencias.grupo_id no existe en esta BD (falta migración 003); "
+                "se omite el bloqueo por asistencias."
             )
 
         try:
