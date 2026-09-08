@@ -13,8 +13,8 @@ import {
   useReporteUsuarios,
   useReporteCarnets,
   useReporteAsistencias,
-  exportReporte,
 } from '../api/reports';
+import { exportReportePdf, exportReporteExcel } from '../lib/reportExports';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
@@ -51,13 +51,23 @@ export default function Reportes() {
   const st = estadisticas.data || {};
 
   const onExport = async (formato) => {
-    if (tab === 'resumen') return;
+    if (tab === 'resumen' || !active) return;
+    const rows = active.query.data || [];
+    if (!rows.length) {
+      toast.error('No hay datos que exportar en esta vista.');
+      return;
+    }
     setExporting(formato);
     try {
-      await exportReporte(tab, formato);
+      if (formato === 'pdf') {
+        await exportReportePdf(tab, rows);
+      } else {
+        await exportReporteExcel(tab, rows);
+      }
       toast.success('Reporte exportado correctamente');
-    } catch {
-      toast.error('No se pudo exportar el reporte. Verifica que el backend soporte la exportación.');
+    } catch (e) {
+      console.error(e);
+      toast.error('No se pudo exportar el reporte. Intenta de nuevo en unos segundos.');
     } finally {
       setExporting(null);
     }

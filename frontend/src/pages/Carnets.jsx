@@ -139,7 +139,13 @@ export default function Carnets() {
 
   const onDownloadPdf = async (c) => {
     try {
-      await downloadCarnetPdf(c.id);
+      const u = userMap[c.user_id] || {};
+      await downloadCarnetPdf({
+        ...c,
+        email: u.email || u.username,
+        tipo_documento: u.tipo_documento || u.document_type,
+        foto_perfil: u.foto_perfil,
+      });
       toast.success('Carnet descargado en PDF');
     } catch (e) {
       toast.error(getErr(e));

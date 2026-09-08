@@ -178,7 +178,7 @@ export default function MiCarnet() {
   const onDownload = async () => {
     setPdfLoading(true);
     try {
-      await downloadCarnetPdf(carnet.id);
+      await downloadCarnetPdf({ ...carnet, foto_perfil: user?.foto_perfil });
       toast.success('Carnet descargado en PDF');
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || 'No se pudo descargar el carnet');
