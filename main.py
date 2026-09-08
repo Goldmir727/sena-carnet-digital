@@ -21,7 +21,7 @@ from core.logger import logger
 async def lifespan(app: FastAPI):
     logger.info("==========================================================")
     logger.info("  Sistema de Gestión de Carnets - API Inicializada")
-    logger.info("  Documentación interactiva: http://127.0.0.1:8001/docs")
+    logger.info("  Documentación interactiva: http://127.0.0.1:8000/docs")
     logger.info("==========================================================")
     # RF-21: vencimiento automático best-effort al arrancar
     try:
@@ -51,7 +51,7 @@ allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8000",
-        "http://127.0.0.1:8001",
+        "http://127.0.0.1:8000",
     ],
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
