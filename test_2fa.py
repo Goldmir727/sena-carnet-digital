@@ -14,7 +14,7 @@ from sqlalchemy import text
 from core.database import AsyncSessionLocal
 from core.config import settings
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://127.0.0.1:8001"
 SEP = "=" * 55
 SLEEP = 1.5
 

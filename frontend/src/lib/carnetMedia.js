@@ -1,6 +1,6 @@
 import { getAccessToken } from '../utils/session';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001';
 
 export async function fetchCarnetQrUrl(id) {
   const res = await fetch(`${BASE}/carnets/${id}/qr`, {
