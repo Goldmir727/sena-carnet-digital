@@ -10,4 +10,5 @@ build/
 *.pyc
 .venv/
 frontend/node_modules/
-frontend/dist/revisar_db.py
+frontend/dist/
+revisar_db.py
