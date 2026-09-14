@@ -379,6 +379,15 @@ class UserService:
                     detail="Permiso denegado. Solo un Coordinador puede alterar roles o estados.",
                 )
 
+        if (
+            current_user["id"] == target_user_id
+            and user_update.role_id is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permiso denegado. No puedes cambiar tu propio rol.",
+            )
+
         if not await self._user_exists(target_user_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

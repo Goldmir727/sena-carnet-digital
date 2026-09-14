@@ -1,29 +1,16 @@
-from core.database import Base
-from .role import Role
-from .centro_formacion import CentroFormacion
-from .programa_formacion import ProgramaFormacion
-from .user import User
-from .ficha import Ficha
-from .matricula import Matricula
-from .sesion import Sesion
-from .evento import Evento
-from .asistencia import Asistencia
-from .audit_log import AuditLog
-from .verification_code import VerificationCode
-from .carnet import Carnet
+from models.user import User
+from models.role import Role
+from models.carnet import Carnet
+from models.attendance import Attendance
+from models.audit_log import AuditLog
+from models.verification_code import VerificationCode
+from models.academic import Evento, Ficha, ProgramaFormacion, Sesion
+from models.grupo import Grupo
+from models.qr_carnet import QRCarnet
+from models.qr_clase import QRClase
 
 __all__ = [
-    "Base",
-    "Role",
-    "CentroFormacion",
-    "ProgramaFormacion",
-    "User",
-    "Ficha",
-    "Matricula",
-    "Sesion",
-    "Evento",
-    "Asistencia",
-    "AuditLog",
-    "VerificationCode",
-    "Carnet",
+	"User", "Role", "Carnet", "Attendance", "AuditLog", "VerificationCode",
+	"ProgramaFormacion", "Ficha", "Sesion", "Evento",
+	"Grupo", "QRCarnet", "QRClase",
 ]

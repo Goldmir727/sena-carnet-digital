@@ -1,4 +1,5 @@
 import bcrypt
+import hashlib
 import jwt
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -41,11 +42,15 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_reset_token(data: dict) -> str:
+def create_reset_token(data: dict, jti: str | None = None) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "reset", "jti": str(uuid.uuid4())})
+    to_encode.update({"exp": expire, "type": "reset", "jti": jti or str(uuid.uuid4())})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def hash_jti(jti: str) -> str:
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
 
 
 def create_preauth_token(data: dict) -> str:
