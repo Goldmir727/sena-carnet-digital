@@ -1,11 +1,12 @@
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import (
     verify_password, create_access_token, create_refresh_token, create_reset_token,
-    decode_token, decode_preauth_token, create_preauth_token, hash_password
+    decode_token, decode_preauth_token, create_preauth_token, hash_password, hash_jti
 )
 from core.config import settings
 from core.logger import logger
@@ -13,11 +14,10 @@ from core.rate_limit import rate_limiter, get_client_ip
 from core.exceptions import AccountBlockedError
 from services.email_service import send_verification_code, send_security_alert, send_email
 
-# RF-03/RF-05: estado en memoria (la BD aún no tiene columnas intentos/bloqueo
-# ni tabla de jti; cuando se aplique la migración 004 usar columnas reales).
+# RF-03: estado en memoria para intentos/bloqueo (la BD no tiene esas columnas).
+# RF-05 (recuperacion de contrasena) usa la tabla password_reset_tokens.
 _login_failures: dict[str, list[datetime]] = {}
 _blocked_until: dict[str, datetime] = {}
-_used_reset_jti: set[str] = set()
 
 
 class AuthService:
@@ -307,7 +307,26 @@ class AuthService:
         if not user:
             return {"message": "Si el correo existe, recibira instrucciones para restablecer su contrasena."}
 
-        reset_token = create_reset_token(data={"sub": email, "user_id": user["id"]})
+        jti = str(uuid.uuid4())
+        reset_token = create_reset_token(
+            data={"sub": email, "user_id": user["id"]},
+            jti=jti
+        )
+        jti_hash = hash_jti(jti)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
+
+        await self.db.execute(
+            text("UPDATE password_reset_tokens SET used = TRUE WHERE user_id = :user_id AND used = FALSE;"),
+            {"user_id": user["id"]}
+        )
+        await self.db.execute(
+            text("""
+                INSERT INTO password_reset_tokens (user_id, jti_hash, expires_at, used, created_at)
+                VALUES (:user_id, :jti_hash, :expires_at, FALSE, :now);
+            """),
+            {"user_id": user["id"], "jti_hash": jti_hash, "expires_at": expires_at, "now": datetime.now(timezone.utc)}
+        )
+        await self.db.commit()
 
         subject = "Recuperacion de contrasena"
         body = (
@@ -335,14 +354,13 @@ class AuthService:
         if payload.get("type") != "reset":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalido.")
 
-        # RF-05: un solo uso (jti)
-        jti = payload.get("jti")
-        if not jti or jti in _used_reset_jti:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token ya utilizado o inválido.")
-
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token sin informacion del usuario.")
+
+        jti = payload.get("jti")
+        if not jti:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalido.")
 
         query = text("SELECT id FROM users WHERE email = :email;")
         result = await self.db.execute(query, {"email": email})
@@ -350,17 +368,54 @@ class AuthService:
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
 
+        user_id = user[0]
+        jti_hash = hash_jti(jti)
+
+        token_query = text("""
+            SELECT id, expires_at
+            FROM password_reset_tokens
+            WHERE user_id = :user_id AND jti_hash = :jti_hash AND used = FALSE
+            LIMIT 1;
+        """)
+        token_result = await self.db.execute(token_query, {"user_id": user_id, "jti_hash": jti_hash})
+        token_row = token_result.mappings().first()
+
+        if not token_row:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token invalido o ya utilizado. Solicite uno nuevo."
+            )
+
+        expires_at = token_row["expires_at"]
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token expirado. Solicite uno nuevo."
+            )
+
         hashed = hash_password(new_password)
-        update = await self.db.execute(
-            text("UPDATE users SET password_hash = :pwd WHERE email = :email;"),
-            {"pwd": hashed, "email": email}
-        )
-        await self.db.commit()
+        try:
+            await self.db.execute(
+                text("UPDATE password_reset_tokens SET used = TRUE WHERE id = :id;"),
+                {"id": token_row["id"]}
+            )
+            await self.db.execute(
+                text("UPDATE users SET password_hash = :pwd WHERE id = :id;"),
+                {"pwd": hashed, "id": user_id}
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se pudo actualizar la contrasena."
+            )
 
-        if update.rowcount == 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se pudo actualizar la contrasena.")
-
-        _used_reset_jti.add(jti)
         return {"message": "Contrasena restablecida exitosamente."}
 
     async def _invalidate_user_codes(self, user_id: int) -> None:
