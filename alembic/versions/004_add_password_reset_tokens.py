@@ -1,7 +1,7 @@
 """tabla password_reset_tokens para recuperacion de contrasena con jti unico
 
 Revision ID: 004
-Revises: c5cf8d927519
+Revises: 001_initial_schema
 Create Date: 2026-09-14
 """
 from typing import Sequence, Union
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "004"
-down_revision: Union[str, None] = "c5cf8d927519"
+down_revision: Union[str, None] = "001_initial_schema"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
