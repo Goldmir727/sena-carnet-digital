@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from core.database import get_db
+from core.security import get_admin_user
 
 from modules.auth.auth_router import router as auth_router
 from modules.roles.role_router import router as role_router
@@ -23,6 +26,15 @@ async def lifespan(app: FastAPI):
     logger.info("  Sistema de Gestión de Carnets - API Inicializada")
     logger.info("  Documentación interactiva: http://127.0.0.1:8000/docs")
     logger.info("==========================================================")
+    try:
+        from core.redis_client import get_client
+        r = await get_client()
+        if r is not None:
+            logger.info("  Caché Redis: ACTIVO")
+        else:
+            logger.info("  Caché Redis: MEMORIA LOCAL (REDIS_URL no configurado)")
+    except Exception as e:
+        logger.warning(f"  Redis: no disponible ({e})")
     # RF-21: vencimiento automático best-effort al arrancar
     try:
         from core.database import AsyncSessionLocal
@@ -34,6 +46,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"No se pudo ejecutar check_expired al arranque: {e}")
     yield
+    try:
+        from core.redis_client import close_client
+        await close_client()
+    except Exception:
+        pass
     logger.info("Cerrando recursos de la API de forma segura.")
 
 
@@ -62,7 +79,24 @@ allow_origins=[
 
 @app.get("/health", tags=["Sistema"])
 async def health_check():
-    return {"status": "ok", "service": "carnets-api"}
+    from core.redis_client import cache_stats
+    return {"status": "ok", "service": "carnets-api", "cache": await cache_stats()}
+
+
+@app.get("/cache/stats", tags=["Sistema"])
+async def cache_statistics(current_user: dict = Depends(get_admin_user)):
+    from core.redis_client import cache_stats
+    return await cache_stats()
+
+
+@app.delete("/cache", tags=["Sistema"], status_code=200)
+async def cache_clear(
+    pattern: str = "*",
+    current_user: dict = Depends(get_admin_user),
+):
+    from core.redis_client import cache_delete
+    n = await cache_delete(f"*{pattern}*" if not pattern.startswith("*") else pattern)
+    return {"cleared": n, "pattern": pattern}
 
 
 app.include_router(auth_router)

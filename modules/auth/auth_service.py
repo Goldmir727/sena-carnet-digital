@@ -14,10 +14,10 @@ from core.rate_limit import rate_limiter, get_client_ip
 from core.exceptions import AccountBlockedError
 from services.email_service import send_verification_code, send_security_alert, send_email
 
-# RF-03: estado en memoria para intentos/bloqueo (la BD no tiene esas columnas).
-# RF-05 (recuperacion de contrasena) usa la tabla password_reset_tokens.
-_login_failures: dict[str, list[datetime]] = {}
-_blocked_until: dict[str, datetime] = {}
+# RF-03: bloqueo en Redis (con fallback en memoria dentro de redis_client).
+# Claves: login:block:<user> (TTL 15min), login:fail:<user> via incr_with_expire.
+# RF-05 usa la tabla password_reset_tokens (base.sql).
+from core.redis_client import cache_get, cache_set, cache_delete, incr_with_expire
 
 
 class AuthService:
@@ -27,19 +27,13 @@ class AuthService:
     async def login(self, username_in: str, password_in: str, request: Request) -> dict:
         logger.info(f"Intento de login para: {username_in}")
 
-        # RF-03: bloqueo 5 intentos -> 15 min
-        now = datetime.now(timezone.utc)
-        until = _blocked_until.get(username_in)
-        if until and now < until:
+        # RF-03: bloqueo 5 intentos -> 15 min (Redis distribuido)
+        window = settings.BLOCK_DURATION_MINUTES * 60
+        if await cache_get(f"login:block:{username_in}"):
             raise HTTPException(
                 status_code=423,
                 detail="Cuenta bloqueada por intentos fallidos. Intente en 15 minutos.",
             )
-        # limpiar ventanas viejas (>15min)
-        _login_failures[username_in] = [
-            t for t in _login_failures.get(username_in, [])
-            if (now - t).total_seconds() < settings.BLOCK_DURATION_MINUTES * 60
-        ]
 
         query = text("""
                  SELECT id, email, document, password_hash, user_status, role_id,
@@ -58,10 +52,10 @@ class AuthService:
             )
 
         if not verify_password(password_in, user["password_hash"]):
-            fails = _login_failures.get(username_in, []) + [now]
-            _login_failures[username_in] = fails
-            if len(fails) >= settings.MAX_LOGIN_ATTEMPTS:
-                _blocked_until[username_in] = now + timedelta(minutes=settings.BLOCK_DURATION_MINUTES)
+            fails = await incr_with_expire(f"login:fail:{username_in}", window)
+            if fails >= settings.MAX_LOGIN_ATTEMPTS:
+                await cache_set(f"login:block:{username_in}", "1", ex=window)
+                await cache_delete(f"login:fail:{username_in}")
                 try:
                     if user["email"]:
                         await send_security_alert(
@@ -79,9 +73,8 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"}
             )
 
-        # éxito: limpiar contador
-        _login_failures.pop(username_in, None)
-        _blocked_until.pop(username_in, None)
+        # éxito: limpiar contador/bloqueo
+        await cache_delete(f"login:fail:{username_in}", f"login:block:{username_in}")
 
         if user["user_status"] not in ("ACTIVE", "ACTIVO", "active", "activo"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")

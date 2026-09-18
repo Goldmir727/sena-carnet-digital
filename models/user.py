@@ -22,6 +22,7 @@ class User(Base):
     document: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     sex: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    blood_type: Mapped[str | None] = mapped_column(String(5), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     photo_profile: Mapped[str | None] = mapped_column(String(500), nullable=True)
     user_status: Mapped[str] = mapped_column(String(20), nullable=False)

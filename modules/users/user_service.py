@@ -8,6 +8,11 @@ from modules.users.user_schema import UserCreate, UserUpdate
 from modules.users.user_constants import ADMIN_ROLE
 from core.security import hash_password
 from core.logger import logger
+from core.redis_client import cache_delete
+
+
+async def _invalidate_user_caches() -> None:
+    await cache_delete("reports:*")
 
 # ============================
 # SERVICIO DE USUARIOS
@@ -298,7 +303,7 @@ class UserService:
                     "role_id": user_data.role_id,
                 },
             )
-            await self.db.commit()
+            await self.db.commit(); await _invalidate_user_caches()
             created = dict(result.mappings().first())
             # RF-06: si el rol es Aprendiz, generar carnet automáticamente
             try:
@@ -316,12 +321,12 @@ class UserService:
                     exp = issue + timedelta(days=_settings.CARNET_DURATION_DAYS)
                     await self.db.execute(
                         text(
-                            "INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date, status) "
-                            "VALUES (:u, :q, :i, :e, 'Activo');"
+                            "INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date) "
+                            "VALUES (:u, :q, :i, :e);"
                         ),
                         {"u": created["id"], "q": generate_qr_token(str(_uuid.uuid4())), "i": issue, "e": exp},
                     )
-                    await self.db.commit()
+                    await self.db.commit(); await _invalidate_user_caches()
             except Exception:
                 await self.db.rollback()
                 logger.warning("No se pudo auto-generar carnet de Aprendiz (¿tabla sin migrar?).")
@@ -463,7 +468,7 @@ class UserService:
 
         try:
             result = await self.db.execute(text(query_str), params)
-            await self.db.commit()
+            await self.db.commit(); await _invalidate_user_caches()
             return dict(result.mappings().first())
         except Exception:
             await self.db.rollback()
@@ -497,7 +502,7 @@ class UserService:
             ),
             {"id": user_id},
         )
-        await self.db.commit()
+        await self.db.commit(); await _invalidate_user_caches()
         row = result.mappings().first()
         if not row:
             logger.warning(f"Intento de desactivar usuario no encontrado: {user_id}")
@@ -540,7 +545,7 @@ class UserService:
                 {"foto": foto_path, "id": user_id},
             )
 
-            await self.db.commit()
+            await self.db.commit(); await _invalidate_user_caches()
             return dict(result.mappings().first())
 
         except Exception:

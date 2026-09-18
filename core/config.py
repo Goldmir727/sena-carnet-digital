@@ -27,6 +27,10 @@ class Settings:
     CARNET_DURATION_DAYS: int = int(os.getenv("CARNET_DURATION_DAYS", "365"))
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads/fotos")
     QR_SECRET: str = os.getenv("QR_SECRET", SECRET_KEY)
+    REDIS_URL: str = os.getenv("REDIS_URL", "")
+    CACHE_TTL_REPORTS: int = int(os.getenv("CACHE_TTL_REPORTS", "60"))
+    CACHE_TTL_GRUPOS: int = int(os.getenv("CACHE_TTL_GRUPOS", "30"))
+    CACHE_TTL_CARNETS: int = int(os.getenv("CACHE_TTL_CARNETS", "30"))
 
     def __init__(self) -> None:
         if not self.DATABASE_URL:
