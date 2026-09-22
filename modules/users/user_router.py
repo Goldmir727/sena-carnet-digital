@@ -10,20 +10,30 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Query,
     UploadFile,
     status,
     Path,
 )
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.database import get_db
-from core.security import get_admin_user, get_current_user
-from modules.users.user_schema import UserCreate, UserResponse, UserUpdate
-from modules.users.user_service import UserService
-from modules.users.user_constants import ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE
+from core.security import get_admin_user, get_current_user, get_coordinador_user
+from modules.users.user_schema import (
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+)
+from modules.users.user_service import UserService, generar_plantilla_excel
+from modules.users.user_constants import (
+    ADMIN_ROLE,
+    ALLOWED_IMAGE_EXTENSIONS,
+    MAX_IMAGE_SIZE,
+)
 
 # ============================
 # RUTAS DE USUARIOS
@@ -78,27 +88,65 @@ async def search_users(
 
 
 # ============================
-# CARGA MASIVA EXCEL (antes de /{user_id} para evitar colisión de ruta)
+# IMPORTACIÓN MASIVA DESDE EXCEL
+# (antes de /{user_id} para evitar colisión de ruta)
 # ============================
+@router.get("/import-template", status_code=status.HTTP_200_OK)
+async def download_import_template(
+    current_user: dict = Depends(get_coordinador_user),
+):
+    """
+    Descarga la plantilla .xlsx para la importación masiva de estudiantes.
+
+    Solo contiene el encabezado con las columnas esperadas:
+    nombres, apellidos, tipo_documento, numero_documento, email, tipo_sangre.
+    """
+    buffer = generar_plantilla_excel()
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=plantilla_estudiantes.xlsx"},
+    )
+
+
 @router.post("/import-excel", status_code=status.HTTP_200_OK)
 async def import_users_excel(
     file: UploadFile = File(..., description="Archivo .xlsx con columnas Documento, Correo, Nombres..."),
+    grupo_id: Annotated[int | None, Form(description="ID del grupo (ficha) destino. Opcional.")] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_admin_user),
+    current_user: dict = Depends(get_coordinador_user),
 ):
     """
     Carga masiva de usuarios desde .xlsx (máx 5 MB).
 
-    Acepta el archivo original del profe con alias en español:
+    Acepta el archivo original con alias en español:
     Documento, Correo, Nombres, Apellidos, Tipo, Usuario, Clave, Rol.
+
+    Sin grupo_id: crea usuarios (cualquier rol según columna Rol, defecto Aprendiz).
+    Con grupo_id: además matricula en el grupo a los Aprendiz (nuevos y
+    existentes por documento, con carnet automático) y agrega al resumen
+    creados, existentes, asignados y ya_en_grupo.
     """
     if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se acepta archivo Excel .xlsx")
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Archivo muy grande (máx 5 MB).")
+    if grupo_id is not None:
+        # Validar el grupo ANTES de crear usuarios para no dejar
+        # cuentas huérfanas si el grupo no existe.
+        from sqlalchemy import text as _text
+        existe = await db.execute(
+            _text("SELECT 1 FROM fichas WHERE id = :id;"), {"id": grupo_id}
+        )
+        if not existe.first():
+            raise HTTPException(status_code=404, detail="Grupo no encontrado.")
     service = UserService(db)
-    return await service.import_users_excel(contents)
+    resultado = await service.import_users_excel(contents)
+    if grupo_id is not None:
+        extra = await service.asignar_importados_a_grupo(grupo_id, resultado.get("detalle", []))
+        resultado.update(extra)
+    return resultado
 
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -202,10 +250,14 @@ async def upload_foto(
     user_id: Annotated[int, Path(description="ID del usuario.")],
     file: UploadFile = File(..., description="Imagen de perfil del usuario."),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_admin_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Carga la fotografía de perfil de un usuario.
+
+    Permite que:
+    - El coordinador suba la foto de cualquier usuario.
+    - Un usuario suba únicamente su propia foto (auto-gestión del perfil).
 
     Args:
         user_id (int): Identificador del usuario.
@@ -215,8 +267,14 @@ async def upload_foto(
         dict: Usuario con la nueva fotografía.
 
     Raises:
-        HTTPException: Si el formato de la imagen no es válido.
+        HTTPException: Si no tiene permiso o el formato no es válido.
     """
+
+    if current_user["role_name"] != ADMIN_ROLE and current_user["id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo puedes subir tu propia foto de perfil.",
+        )
 
     ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
 

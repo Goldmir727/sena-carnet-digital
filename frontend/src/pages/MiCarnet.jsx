@@ -6,6 +6,8 @@ import {
   Mail,
   FileText,
   User,
+  Droplet,
+  Building2,
   CalendarDays,
   Copy,
   Check,
@@ -18,8 +20,10 @@ import {
 import toast from 'react-hot-toast';
 import { useMiCarnet } from '../api/carnets';
 import { useUser } from '../api/users';
+import { useAuth } from '../hooks/useAuth';
 import { useGenerarQrCarnet, fetchQrImageBlob } from '../api/qr';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
+import CompleteProfile from '../components/CompleteProfile';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -57,8 +61,16 @@ export default function MiCarnet() {
   } = useMiCarnet();
   const sinCarnet = isError && error?.response?.status === 404;
 
-  const profile = useUser(carnet?.user_id);
+  const { user: authUser } = useAuth();
+  const profile = useUser(carnet?.user_id || authUser?.id);
   const user = profile.data;
+
+  // Onboarding: el Aprendiz con datos críticos faltantes completa
+  // su perfil antes de ver el carnet (tipo de sangre + foto).
+  const perfilIncompleto =
+    authUser?.role_name === 'Aprendiz' &&
+    !!profile.data &&
+    (!profile.data.tipo_sangre || !profile.data.foto_perfil);
 
   const [qrUrl, setQrUrl] = useState(null);
   const [qrError, setQrError] = useState(false);
@@ -129,7 +141,13 @@ export default function MiCarnet() {
     };
   }, []);
 
-  if (isLoading) return <LoadingState label="Consultando tu carnet…" />;
+  if (isLoading || (authUser?.role_name === 'Aprendiz' && profile.isLoading && !profile.data)) {
+    return <LoadingState label="Consultando tu carnet…" />;
+  }
+
+  if (perfilIncompleto) {
+    return <CompleteProfile user={profile.data} />;
+  }
 
   if (sinCarnet) {
     return (
@@ -172,13 +190,20 @@ export default function MiCarnet() {
   const apellidos = user?.apellidos || user?.last_name || '';
   const documento = user?.numero_documento || user?.document || '—';
   const tipoDoc = user?.tipo_documento || user?.document_type || '';
+  const tipoSangre = user?.tipo_sangre || user?.blood_type || carnet.tipo_sangre || '—';
+  const centro = user?.centro_nombre || carnet.centro_nombre || '—';
   const esValido =
     carnet.estado === 'Activo' && (!carnet.fecha_vencimiento || new Date(carnet.fecha_vencimiento) >= new Date());
 
   const onDownload = async () => {
     setPdfLoading(true);
     try {
-      await downloadCarnetPdf({ ...carnet, foto_perfil: user?.foto_perfil });
+      await downloadCarnetPdf({
+        ...carnet,
+        foto_perfil: user?.foto_perfil,
+        tipo_sangre: user?.tipo_sangre || user?.blood_type || carnet.tipo_sangre,
+        centro_nombre: user?.centro_nombre || carnet.centro_nombre,
+      });
       toast.success('Carnet descargado en PDF');
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || 'No se pudo descargar el carnet');
@@ -248,6 +273,8 @@ export default function MiCarnet() {
               <DetailRow icon={IdCard} label="Tipo de documento" value={tipoDoc} />
               <DetailRow icon={IdCard} label="Número de documento" value={documento} />
               <DetailRow icon={Mail} label="Correo electrónico" value={user?.email} />
+              <DetailRow icon={Droplet} label="Tipo de sangre" value={tipoSangre} />
+              <DetailRow icon={Building2} label="Centro de formación" value={centro} />
             </div>
           </Card>
 

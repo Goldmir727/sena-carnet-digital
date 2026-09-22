@@ -59,6 +59,8 @@ function Avatar({ initials, size = 'md', src }) {
 
 const TIPOS_DOC = ['CC', 'CE', 'TI', 'PEP'];
 
+const TIPOS_SANGRE = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+
 const EMPTY_FORM = {
   username: '',
   email: '',
@@ -68,6 +70,7 @@ const EMPTY_FORM = {
   apellidos: '',
   tipo_documento: '',
   numero_documento: '',
+  tipo_sangre: '',
 };
 
 function initials(nombres, apellidos, email) {
@@ -163,6 +166,7 @@ export default function Usuarios() {
       apellidos: row.apellidos || row.last_name || '',
       tipo_documento: row.tipo_documento || row.document_type || '',
       numero_documento: row.numero_documento || row.document || '',
+      tipo_sangre: row.tipo_sangre || row.blood_type || '',
     });
     setFormErrors({});
     setEditing(row);
@@ -184,6 +188,7 @@ export default function Usuarios() {
       ...(form.apellidos.trim() && { apellidos: form.apellidos.trim() }),
       ...(form.tipo_documento && { tipo_documento: form.tipo_documento }),
       ...(form.numero_documento.trim() && { numero_documento: form.numero_documento.trim() }),
+      ...(form.tipo_sangre && { tipo_sangre: form.tipo_sangre }),
     };
     try {
       await createUser.mutateAsync(payload);
@@ -203,6 +208,7 @@ export default function Usuarios() {
       ...(form.tipo_documento && { tipo_documento: form.tipo_documento }),
       ...(form.numero_documento.trim() && { numero_documento: form.numero_documento.trim() }),
       ...(form.password && { password: form.password }),
+      ...(form.tipo_sangre ? { tipo_sangre: form.tipo_sangre } : { tipo_sangre: null }),
     };
     try {
       await updateUser.mutateAsync({ id: editing.id, ...payload });
@@ -417,6 +423,10 @@ export default function Usuarios() {
           <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} />
           <Select label="Tipo de documento" options={TIPOS_DOC} value={form.tipo_documento} onChange={set('tipo_documento')} placeholder="Selecciona" allowEmpty={false} />
           <Input label="Número de documento" value={form.numero_documento} onChange={set('numero_documento')} />
+          <Select label="Tipo de sangre" options={TIPOS_SANGRE} value={form.tipo_sangre} onChange={set('tipo_sangre')} placeholder="Sin especificar" hint="Opcional. Aparece impreso en el carnet." />
+          {editing ? (
+            <Input label="Centro de formación" value={editing.centro_nombre || '—'} disabled hint="Se define por el grupo/ficha del usuario" />
+          ) : null}
         </div>
       </Modal>
 
@@ -494,7 +504,7 @@ export default function Usuarios() {
               const f = e.target.files?.[0];
               if (!f) return;
               setImportResult(null);
-              importExcel.mutate(f, {
+              importExcel.mutate({ file: f }, {
                 onSuccess: (r) => {
                   setImportResult(r);
                   toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${r.errores} errores`);

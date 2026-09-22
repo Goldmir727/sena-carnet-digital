@@ -29,6 +29,20 @@ TRANSICIONES_PERMITIDAS = {
 # Sin columna status -> estado derivado: Vencido si expiration_date < hoy, else Activo.
 ESTADO_SQL = "CASE WHEN c.expiration_date < CURRENT_DATE THEN 'Vencido' ELSE 'Activo' END"
 
+# Centro de formación del titular, derivado de su matrícula activa más
+# reciente (matriculas -> fichas -> centros_formacion). No hay columna
+# de centro en users, por eso se resuelve aquí igual que en UserService.
+CENTRO_SQL = """(SELECT cf.nombre FROM matriculas m
+              JOIN fichas f ON f.id = m.ficha_id
+              LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
+              WHERE m.user_id = c.user_id AND m.status = 'activa'
+              ORDER BY m.id DESC LIMIT 1) AS centro_nombre,
+         (SELECT cf.id FROM matriculas m
+              JOIN fichas f ON f.id = m.ficha_id
+              LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
+              WHERE m.user_id = c.user_id AND m.status = 'activa'
+              ORDER BY m.id DESC LIMIT 1) AS centro_id"""
+
 
 class CarnetService:
     def __init__(self, db: AsyncSession) -> None:
@@ -93,6 +107,8 @@ class CarnetService:
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.blood_type AS tipo_sangre,
+                     {CENTRO_SQL},
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
                      u.email AS usuario_email
@@ -120,6 +136,8 @@ class CarnetService:
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.blood_type AS tipo_sangre,
+                     {CENTRO_SQL},
                      u.photo_profile AS foto_perfil,
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
@@ -139,6 +157,8 @@ class CarnetService:
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
+                     u.blood_type AS tipo_sangre,
+                     {CENTRO_SQL},
                      u.photo_profile AS foto_perfil,
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
@@ -176,6 +196,8 @@ class CarnetService:
                       {ESTADO_SQL} AS estado, c.issue_date AS fecha_emision,
                       c.expiration_date AS fecha_vencimiento,
                       u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento,
+                      u.document_type AS tipo_documento, u.blood_type AS tipo_sangre,
+                      {CENTRO_SQL},
                       (u.name || ' ' || u.last_name) AS usuario_nombre,
                       u.document AS usuario_documento,
                       u.email AS usuario_email
