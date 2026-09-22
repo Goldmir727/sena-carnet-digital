@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Users, Plus, Pencil, Trash2, UserPlus, UserMinus, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
-  useGrupos,
+import { useGrupos,
   useCreateGrupo,
   useUpdateGrupo,
   useDeleteGrupo,
@@ -11,6 +10,7 @@ import {
   useQuitarEstudiante,
   useAsignarDocentes,
 } from '../api/grupos';
+import { useCentros } from '../api/centros';
 import { useUsers } from '../api/users';
 import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
@@ -30,13 +30,15 @@ const parserDate = (iso) =>
 
 export default function Grupos() {
   const gruposQuery = useGrupos();
+  const centrosQuery = useCentros();
+  const centrosById = Object.fromEntries((centrosQuery.data || []).map((c) => [c.id, c]));
   const createGrupo = useCreateGrupo();
   const updateGrupo = useUpdateGrupo();
   const deleteGrupo = useDeleteGrupo();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nombre: '', descripcion: '' });
+  const [form, setForm] = useState({ nombre: '', descripcion: '', centro_id: '' });
   const [formErrors, setFormErrors] = useState({});
   const [confirm, setConfirm] = useState(null);
 
@@ -66,13 +68,13 @@ export default function Grupos() {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const openCreate = () => {
-    setForm({ nombre: '', descripcion: '' });
+    setForm({ nombre: '', descripcion: '', centro_id: '' });
     setFormErrors({});
     setCreateOpen(true);
   };
 
   const openEdit = (row) => {
-    setForm({ nombre: row.nombre || '', descripcion: row.descripcion || '' });
+    setForm({ nombre: row.nombre || '', descripcion: row.descripcion || '', centro_id: row.centro_id || '' });
     setFormErrors({});
     setEditing(row);
     setCreateOpen(true);
@@ -89,6 +91,7 @@ export default function Grupos() {
     const payload = {
       nombre: form.nombre.trim(),
       ...(form.descripcion.trim() && { descripcion: form.descripcion.trim() }),
+      ...(form.centro_id && { centro_id: Number(form.centro_id) }),
     };
     try {
       if (editing) {
@@ -159,6 +162,15 @@ export default function Grupos() {
             {r.descripcion && <p className="truncate text-xs text-slate-400">{r.descripcion}</p>}
           </div>
         </div>
+      ),
+    },
+    {
+      key: 'centro',
+      label: 'Centro',
+      render: (r) => (
+        <span className="text-slate-600">
+          {r.centro_id ? centrosById[r.centro_id]?.nombre || `Centro ${r.centro_id}` : '—'}
+        </span>
       ),
     },
     {
@@ -282,6 +294,21 @@ export default function Grupos() {
             placeholder="Detalles opcionales del grupo"
             rows={3}
           />
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Centro de formación</span>
+            <select
+              value={form.centro_id}
+              onChange={set('centro_id')}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green"
+            >
+              <option value="">Sin centro</option>
+              {(centrosQuery.data || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} ({c.codigo})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </Modal>
 

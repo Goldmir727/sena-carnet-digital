@@ -17,6 +17,7 @@ from modules.reports.reports_router import router as reports_router
 from modules.reports.reportes_alias_router import router as reportes_alias_router
 from modules.grupos.grupo_router import router as grupo_router
 from modules.qr.qr_router import router as qr_router
+from modules.centros.centro_router import router as centro_router
 from core.logger import logger
 
 
@@ -110,6 +111,7 @@ app.include_router(reports_router)
 app.include_router(reportes_alias_router)
 app.include_router(grupo_router)
 app.include_router(qr_router)
+app.include_router(centro_router)
 
 import os
 from core.config import settings

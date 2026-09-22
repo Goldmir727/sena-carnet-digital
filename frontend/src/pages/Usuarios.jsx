@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
-import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto } from '../api/users';
+import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel } from '../api/users';
 import { useRoles } from '../api/roles';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
 import PageHeader from '../components/ui/PageHeader';
@@ -87,6 +87,9 @@ export default function Usuarios() {
   const updateUser = useUpdateUser();
   const deactivateUser = useDeactivateUser();
   const uploadPhoto = useUploadPhoto();
+  const importExcel = useImportUsersExcel();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 350);
@@ -326,9 +329,14 @@ export default function Usuarios() {
         icon={Users}
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Usuarios' }]}
         actions={
-          <Button icon={UserPlus} onClick={openCreate}>
-            Nuevo usuario
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => { setImportResult(null); setImportOpen(true); }}>
+              Importar Excel
+            </Button>
+            <Button icon={UserPlus} onClick={openCreate}>
+              Nuevo usuario
+            </Button>
+          </div>
         }
       />
 
@@ -463,6 +471,56 @@ export default function Usuarios() {
         description={`¿Seguro que quieres desactivar a ${confirmRow?.nombres || confirmRow?.name || confirmRow?.username}? Perderá el acceso al sistema y a su carnet digital.`}
         confirmLabel="Desactivar"
       />
+
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Importar usuarios desde Excel"
+        description="Sube el .xlsx original. Columnas: Documento, Correo, Nombres, Apellidos, Tipo, Usuario, Clave, Rol."
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setImportOpen(false)}>
+              Cerrar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setImportResult(null);
+              importExcel.mutate(f, {
+                onSuccess: (r) => {
+                  setImportResult(r);
+                  toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${r.errores} errores`);
+                },
+                onError: (err) => toast.error(getErr(err)),
+              });
+              e.target.value = '';
+            }}
+            className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-sena-tint-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-sena-green-dark hover:file:bg-sena-tint-200"
+          />
+          {importExcel.isPending && <p className="text-sm text-slate-500">Procesando archivo…</p>}
+          {importResult && (
+            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+              <p>Procesados: <strong>{importResult.procesados}</strong></p>
+              <p>Insertados: <strong>{importResult.insertados}</strong></p>
+              <p>Duplicados: <strong>{importResult.duplicados}</strong></p>
+              <p>Errores: <strong>{importResult.errores}</strong></p>
+              {(importResult.detalle || []).filter((d) => d.estado !== 'insertado').slice(0, 10).map((d, i) => (
+                <p key={i} className="truncate text-xs text-slate-400">
+                  Fila {d.fila}: {d.estado}{d.mensaje ? ` — ${d.mensaje}` : ''} ({d.documento || '—'})
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -16,6 +16,9 @@ class GrupoCreate(BaseModel):
         max_length=255,
         description="Descripción del grupo.",
     )
+    centro_id: Optional[int] = Field(
+        None, gt=0, description="ID del centro de formación (fichas.centro_id)."
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -32,6 +35,7 @@ class GrupoResponse(BaseModel):
     id: int = Field(..., description="ID del grupo.")
     nombre: str = Field(..., description="Nombre del grupo.")
     descripcion: Optional[str] = Field(None, description="Descripción del grupo.")
+    centro_id: Optional[int] = Field(None, description="Centro de formación.")
     created_at: datetime = Field(..., description="Fecha de creación.")
 
     model_config = ConfigDict(from_attributes=True)
@@ -56,6 +60,9 @@ class GrupoUpdate(BaseModel):
         None,
         max_length=255,
         description="Descripción del grupo.",
+    )
+    centro_id: Optional[int] = Field(
+        None, gt=0, description="ID del centro de formación (fichas.centro_id)."
     )
 
     model_config = ConfigDict(extra="forbid")

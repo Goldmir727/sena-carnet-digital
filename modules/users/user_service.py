@@ -555,3 +555,142 @@ class UserService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al actualizar la foto.",
             )
+
+    # ============================
+    # CARGA MASIVA EXCEL
+    # Acepta el .xlsx original del profe con alias en español.
+    # ============================
+
+    async def import_users_excel(self, contenido: bytes) -> dict:
+        """
+        Importa usuarios desde un .xlsx fila por fila.
+
+        Columnas aceptadas (insensible a mayúsculas/tildes/espacios):
+        - Documento: documento, numero_documento, numero, document, cc
+        - Correo: correo, email, correo_electronico
+        - Nombres: nombres, nombre, name
+        - Apellidos: apellidos, apellido, last_name
+        - Tipo doc: tipo_documento, tipo, document_type
+        - Usuario: username, usuario
+        - Clave: password, contraseña, contrasena (si falta, se usa el documento)
+        - Rol: role_id, rol (id numérico o nombre: Aprendiz/Docente/...)
+        """
+        import unicodedata
+        from io import BytesIO
+        from openpyxl import load_workbook
+
+        def norm(h) -> str:
+            h = str(h or "").strip().lower()
+            h = "".join(c for c in unicodedata.normalize("NFD", h) if unicodedata.category(c) != "Mn")
+            return h.replace(" ", "_")
+
+        ALIAS = {
+            "documento": {"documento", "numero_documento", "numero", "document", "cc", "dni"},
+            "correo": {"correo", "email", "correo_electronico", "e_mail"},
+            "nombres": {"nombres", "nombre", "name"},
+            "apellidos": {"apellidos", "apellido", "last_name"},
+            "tipo_documento": {"tipo_documento", "tipo", "document_type", "tipo_doc"},
+            "username": {"username", "usuario", "user"},
+            "password": {"password", "contrasena", "clave"},
+            "rol": {"role_id", "rol", "role"},
+        }
+
+        try:
+            wb = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Archivo .xlsx inválido.")
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows or not any(rows[0]):
+            raise HTTPException(status_code=400, detail="Excel vacío o sin encabezados.")
+
+        col: dict[str, int] = {}
+        for i, h in enumerate(rows[0]):
+            n = norm(h)
+            for campo, variantes in ALIAS.items():
+                if n in variantes and campo not in col:
+                    col[campo] = i
+        faltan = [c for c in ("documento", "correo", "nombres") if c not in col]
+        if faltan:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Faltan columnas requeridas: {', '.join(faltan)}. "
+                       "Se aceptan alias: Documento, Correo, Nombres, Apellidos.",
+            )
+
+        roles = await self.db.execute(text("SELECT id, name FROM roles;"))
+        rol_por_nombre = {r["name"].strip().lower(): r["id"] for r in roles.mappings().all()}
+
+        procesados = insertados = errores = duplicados = 0
+        detalle: list[dict] = []
+        for n, r in enumerate(rows[1:], start=2):
+            if all(v is None or str(v).strip() == "" for v in r):
+                continue
+            procesados += 1
+            try:
+                def val(campo):
+                    i = col.get(campo)
+                    v = r[i] if i is not None and i < len(r) else None
+                    return str(v).strip() if v is not None else ""
+
+                documento, correo = val("documento"), val("correo")
+                nombres, apellidos = val("nombres"), val("apellidos") or "-"
+                if not documento or not correo or not nombres:
+                    raise ValueError("Documento, Correo y Nombres son obligatorios")
+                if await self._document_exists(documento) or await self._email_exists(correo):
+                    duplicados += 1
+                    detalle.append({"fila": n, "estado": "duplicado", "documento": documento})
+                    continue
+
+                rol_raw = val("rol")
+                if not rol_raw:
+                    role_id = rol_por_nombre.get("aprendiz")
+                elif rol_raw.isdigit():
+                    role_id = int(rol_raw)
+                    if not await self._role_exists(role_id):
+                        raise ValueError(f"role_id {rol_raw} no existe")
+                else:
+                    role_id = rol_por_nombre.get(rol_raw.strip().lower())
+                    if role_id is None:
+                        raise ValueError(f"rol '{rol_raw}' desconocido")
+
+                username = val("username") or correo
+                if await self._username_exists(username):
+                    raise ValueError(f"usuario '{username}' ya existe")
+                password = val("password") or documento
+
+                await self.db.execute(
+                    text("""
+                        INSERT INTO users (name, last_name, document_type, document, email,
+                                   password_hash, user_status, role_id, registration_date)
+                        VALUES (:name, :last_name, :document_type, :document, :email,
+                            :password_hash, 'ACTIVE', :role_id, NOW());
+                    """),
+                    {
+                        "name": nombres,
+                        "last_name": apellidos,
+                        "document_type": val("tipo_documento") or "CC",
+                        "document": documento,
+                        "email": correo,
+                        "password_hash": hash_password(password),
+                        "role_id": role_id,
+                    },
+                )
+                insertados += 1
+                detalle.append({"fila": n, "estado": "insertado", "documento": documento})
+            except HTTPException:
+                raise
+            except Exception as e:
+                errores += 1
+                doc = ""
+                try:
+                    doc = str(r[col["documento"]] or "").strip()
+                except Exception:
+                    pass
+                detalle.append({"fila": n, "estado": "error", "documento": doc, "mensaje": str(e)})
+
+        await self.db.commit(); await _invalidate_user_caches()
+        return {
+            "procesados": procesados, "insertados": insertados,
+            "errores": errores, "duplicados": duplicados, "detalle": detalle,
+        }

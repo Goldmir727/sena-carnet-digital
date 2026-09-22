@@ -47,7 +47,6 @@ export function useDeactivateUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
 }
-
 export function useUploadPhoto() {
   const qc = useQueryClient();
   return useMutation({
@@ -56,6 +55,20 @@ export function useUploadPhoto() {
       form.append('file', file);
       return api
         .post(`/users/${id}/foto`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then((r) => r.data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+export function useImportUsersExcel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api
+        .post('/users/import-excel', form, { headers: { 'Content-Type': 'multipart/form-data' } })
         .then((r) => r.data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),

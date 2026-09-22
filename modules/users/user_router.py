@@ -77,6 +77,30 @@ async def search_users(
     return await service.search_users(q)
 
 
+# ============================
+# CARGA MASIVA EXCEL (antes de /{user_id} para evitar colisión de ruta)
+# ============================
+@router.post("/import-excel", status_code=status.HTTP_200_OK)
+async def import_users_excel(
+    file: UploadFile = File(..., description="Archivo .xlsx con columnas Documento, Correo, Nombres..."),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_admin_user),
+):
+    """
+    Carga masiva de usuarios desde .xlsx (máx 5 MB).
+
+    Acepta el archivo original del profe con alias en español:
+    Documento, Correo, Nombres, Apellidos, Tipo, Usuario, Clave, Rol.
+    """
+    if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Solo se acepta archivo Excel .xlsx")
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Archivo muy grande (máx 5 MB).")
+    service = UserService(db)
+    return await service.import_users_excel(contents)
+
+
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def read_user(
     user_id: Annotated[int, Path(description="ID del usuario.")],

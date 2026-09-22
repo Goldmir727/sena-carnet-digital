@@ -68,6 +68,7 @@ class GrupoService:
         query = text("""
             SELECT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
+                   f.centro_id AS centro_id,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at,
                    f.director_id AS coordinador_id,
                    u.email AS coordinador_username,
@@ -86,6 +87,7 @@ class GrupoService:
         query = text("""
             SELECT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
+                   f.centro_id AS centro_id,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at,
                    f.director_id AS coordinador_id,
                    u.email AS coordinador_username,
@@ -123,18 +125,27 @@ class GrupoService:
         hoy = date.today()
         fin = hoy + timedelta(days=365)
 
+        centro_id = getattr(grupo_data, "centro_id", None)
+        if centro_id is not None:
+            c = await self.db.execute(
+                text("SELECT 1 FROM centros_formacion WHERE id = :id;"), {"id": centro_id}
+            )
+            if c.first() is None:
+                raise HTTPException(status_code=400, detail="El centro indicado no existe.")
+
         query = text("""
-            INSERT INTO fichas (programa_id, number, director_id, start_date, end_date)
-            VALUES (:prog, :nombre, :director, :ini, :fin)
+            INSERT INTO fichas (programa_id, number, director_id, centro_id, start_date, end_date)
+            VALUES (:prog, :nombre, :director, :centro, :ini, :fin)
             RETURNING id, number AS nombre,
                       ('Ficha ' || number) AS descripcion,
+                      centro_id AS centro_id,
                       COALESCE(start_date::timestamptz, NOW()) AS created_at,
                       director_id AS coordinador_id;
         """)
         try:
             result = await self.db.execute(
                 query,
-                {"prog": programa_id, "nombre": grupo_data.nombre, "director": coordinador_id, "ini": hoy, "fin": fin},
+                {"prog": programa_id, "nombre": grupo_data.nombre, "director": coordinador_id, "centro": centro_id, "ini": hoy, "fin": fin},
             )
             await self.db.commit()
             await invalidate_grupo_cache()
@@ -155,6 +166,9 @@ class GrupoService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Grupo no encontrado."
             )
 
+        sets: list[str] = []
+        params: dict = {"id": grupo_id}
+
         if data.get("nombre") is not None:
             existing = await self.db.execute(
                 text("SELECT 1 FROM fichas WHERE number = :nombre AND id != :id"),
@@ -165,25 +179,41 @@ class GrupoService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Ya existe un grupo con ese nombre.",
                 )
-            try:
-                result = await self.db.execute(
-                    text("""
-                        UPDATE fichas SET number = :nombre WHERE id = :id
-                        RETURNING id, number AS nombre,
-                                  ('Ficha ' || number) AS descripcion,
-                                  COALESCE(start_date::timestamptz, NOW()) AS created_at,
-                                  director_id AS coordinador_id;
-                    """),
-                    {"nombre": data["nombre"], "id": grupo_id},
-                )
-                await self.db.commit()
-                await invalidate_grupo_cache(grupo_id)
-                return dict(result.mappings().first())
-            except Exception:
-                await self.db.rollback()
-                raise HTTPException(status_code=500, detail="Error al actualizar el grupo.")
-        # solo descripción -> nada que persistir en fichas (sin columna); devolver actual
-        return await self.get_by_id(grupo_id)
+            sets.append("number = :nombre")
+            params["nombre"] = data["nombre"]
+
+        if data.get("centro_id") is not None:
+            c = await self.db.execute(
+                text("SELECT 1 FROM centros_formacion WHERE id = :id;"),
+                {"id": data["centro_id"]},
+            )
+            if c.first() is None:
+                raise HTTPException(status_code=400, detail="El centro indicado no existe.")
+            sets.append("centro_id = :centro_id")
+            params["centro_id"] = data["centro_id"]
+
+        if not sets:
+            # solo descripción -> nada que persistir en fichas (sin columna); devolver actual
+            return await self.get_by_id(grupo_id)
+
+        try:
+            result = await self.db.execute(
+                text(f"""
+                    UPDATE fichas SET {", ".join(sets)} WHERE id = :id
+                    RETURNING id, number AS nombre,
+                              ('Ficha ' || number) AS descripcion,
+                              centro_id AS centro_id,
+                              COALESCE(start_date::timestamptz, NOW()) AS created_at,
+                              director_id AS coordinador_id;
+                """),
+                params,
+            )
+            await self.db.commit()
+            await invalidate_grupo_cache(grupo_id)
+            return dict(result.mappings().first())
+        except Exception:
+            await self.db.rollback()
+            raise HTTPException(status_code=500, detail="Error al actualizar el grupo.")
 
     async def delete(self, grupo_id: int) -> dict:
         logger.info(f"Eliminando grupo ID: {grupo_id}")
@@ -334,6 +364,7 @@ class GrupoService:
         query = text("""
             SELECT DISTINCT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
+                   f.centro_id AS centro_id,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at
             FROM fichas f
             LEFT JOIN sesiones s ON s.ficha_id = f.id
