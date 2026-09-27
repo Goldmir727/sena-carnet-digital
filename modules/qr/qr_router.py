@@ -39,3 +39,13 @@ async def get_carnet_qr_image(
 ):
     buffer = generate_qr_image(token)
     return Response(content=buffer.getvalue(), media_type="image/png")
+
+
+@router.get("/clase/image")
+async def get_clase_qr_image(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    buffer = generate_qr_image(token)
+    return Response(content=buffer.getvalue(), media_type="image/png")
