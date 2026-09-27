@@ -89,6 +89,8 @@ export async function downloadCarnetPdf(carnet) {
   const documento = carnet.numero_documento || carnet.document || '—';
   const tipoDoc = carnet.tipo_documento || carnet.document_type || 'CC';
   const email = carnet.email || carnet.usuario_email || '—';
+  const tipoSangre = carnet.tipo_sangre || carnet.blood_type || '—';
+  const centro = carnet.centro_nombre || carnet.centro || '—';
   const uuid = carnet.uuid || carnet.codigo_qr || '—';
   const estado = carnet.estado || '—';
 
@@ -161,7 +163,7 @@ export async function downloadCarnetPdf(carnet) {
   const cardX = 14;
   const cardY = 62;
   const cardW = W - 28;
-  const cardH = 170;
+  const cardH = 184;
 
   // sombra
   doc.setFillColor('#E3EBE6');
@@ -249,15 +251,19 @@ export async function downloadCarnetPdf(carnet) {
 
   const rows = [
     { label: 'Documento', value: `${tipoDoc} ${documento}` },
+    { label: 'Tipo de sangre', value: tipoSangre },
+    { label: 'Centro de formación', value: centro },
     { label: 'Correo electrónico', value: email },
     { label: 'Válido hasta', value: fmtLarga(carnet.fecha_vencimiento) },
     { label: 'Código único (UUID)', value: uuid, mono: true },
   ];
 
-  let fY = Math.max(cardY + 72, nameLast + 10);
+  let fY = Math.max(cardY + 68, nameLast + 10);
   doc.setDrawColor('#E8EFEA');
   doc.setLineWidth(0.25);
+  const valW = cardX + cardW - 8 - nameX;
   rows.forEach((row, i) => {
+    const valLines = doc.splitTextToSize(String(row.value), valW).slice(0, 2);
     if (i > 0) {
       doc.setLineDashPattern([1.2, 1.6], 0);
       doc.line(nameX, fY - 2.5, cardX + cardW - 8, fY - 2.5);
@@ -269,14 +275,14 @@ export async function downloadCarnetPdf(carnet) {
     doc.text(row.label.toUpperCase(), nameX, fY);
     doc.setTextColor(C_INK);
     doc.setFont(row.mono ? 'courier' : 'helvetica', 'normal');
-    doc.setFontSize(row.mono ? 8 : 10.5);
-    doc.text(String(row.value), nameX, fY + 4);
-    fY += 11;
+    doc.setFontSize(row.mono ? 8 : 10);
+    doc.text(valLines, nameX, fY + 4);
+    fY += 7 + valLines.length * 4.5;
   });
 
   // ===== Panel de validación =====
-  const panelTop = 186;
-  const panelH = 46;
+  const panelTop = 198;
+  const panelH = 44;
   doc.setFillColor(C_GREEN_TINT_50);
   doc.setDrawColor(C_BORDER);
   doc.setLineWidth(0.5);

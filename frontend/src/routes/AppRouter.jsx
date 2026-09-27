@@ -9,6 +9,7 @@ import Dashboard from '../pages/Dashboard';
 import MiCarnet from '../pages/MiCarnet';
 import Usuarios from '../pages/Usuarios';
 import Grupos from '../pages/Grupos';
+import Centros from '../pages/Centros';
 import Carnets from '../pages/Carnets';
 import Asistencia from '../pages/Asistencia';
 import RegistrarAsistencia from '../pages/RegistrarAsistencia';
@@ -49,6 +50,14 @@ export default function AppRouter() {
             element={
               <PermissionRoute permission="grupos.read">
                 <Grupos />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="centros"
+            element={
+              <PermissionRoute permission="centros.read">
+                <Centros />
               </PermissionRoute>
             }
           />

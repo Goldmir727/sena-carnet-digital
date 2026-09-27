@@ -1,0 +1,20 @@
+{
+  "name": "Sistema de Carnets SENA",
+  "short_name": "Carnets SENA",
+  "description": "Carnets digitales y control de asistencia SENA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#39A900",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

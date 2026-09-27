@@ -8,48 +8,146 @@ from PIL import Image
 from services.qr_service import generate_qr_image
 
 
+def _txt(value) -> str:
+    """Valor neutro para datos faltantes sin romper la generación."""
+    text = "" if value is None else str(value).strip()
+    return text if text else "—"
+
+
+def _fit(c, text: str, max_width: float, font: str, size: float) -> str:
+    """Recorta con elipsis si el texto excede el ancho disponible."""
+    text = _txt(text)
+    if c.stringWidth(text, font, size) <= max_width:
+        return text
+    while text and c.stringWidth(text + "…", font, size) > max_width:
+        text = text[:-1]
+    return (text + "…") if text else "—"
+
+
+def _fmt_fecha(value) -> str:
+    if not value:
+        return "—"
+    text = str(value).strip()
+    parts = text.split("-")
+    if len(parts) == 3 and len(parts[0]) == 4:
+        return f"{parts[2]}/{parts[1]}/{parts[0]}"
+    return text
+
+
 def generar_carnet_pdf(user: dict, carnet: dict, qr_token: str) -> BytesIO:
+    """
+    Carnet institucional tamaño tarjeta CR80 (85.6 x 53.98 mm, horizontal),
+    fondo blanco orientado a impresión: foto, datos, tipo de sangre,
+    centro de formación, vigencia/estado y QR del sistema.
+    """
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    PAGE_W = 85.6 * mm
+    PAGE_H = 53.98 * mm
+    c = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
-    c.setStrokeColor(HexColor("#1a365d"))
-    c.setLineWidth(2)
-    c.rect(20*mm, height - 55*mm, 170*mm, 45*mm)
+    GREEN = HexColor("#0F7A4D")
+    GREEN_DARK = HexColor("#0A5A39")
+    YELLOW = HexColor("#F2B43A")
+    INK = HexColor("#17212B")
+    MUTED = HexColor("#8A99A6")
+    BORDER = HexColor("#CDE8DA")
 
-    c.setFillColor(HexColor("#1a365d"))
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(25*mm, height - 30*mm, "CARNET INSTITUCIONAL")
+    # Fondo blanco.
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
 
-    c.setFillColor(HexColor("#000000"))
-    c.setFont("Helvetica", 10)
-    y = height - 45*mm
-    c.drawString(25*mm, y, f"Nombre: {user.get('nombres', '')} {user.get('apellidos', '')}")
-    c.drawString(25*mm, y - 5*mm, f"Documento: {user.get('tipo_documento', '')} {user.get('numero_documento', '')}")
-    c.drawString(25*mm, y - 10*mm, f"Email: {user.get('email', '')}")
-    c.drawString(25*mm, y - 15*mm, f"UUID: {carnet.get('uuid', '')}")
-    c.drawString(25*mm, y - 20*mm, f"Válido hasta: {carnet.get('fecha_vencimiento', '')}")
+    # Banda institucional superior.
+    band_h = 11 * mm
+    band_y = PAGE_H - band_h
+    c.setFillColor(GREEN)
+    c.rect(0, band_y, PAGE_W, band_h, fill=1, stroke=0)
+    c.setFillColor(GREEN_DARK)
+    c.rect(0, PAGE_H - 2 * mm, PAGE_W, 2 * mm, fill=1, stroke=0)
+    c.setFillColor(YELLOW)
+    c.rect(0, band_y, PAGE_W, 0.8 * mm, fill=1, stroke=0)
 
-    qr_img = generate_qr_image(qr_token)
-    c.drawImage(ImageReader(qr_img), 140*mm, y - 25*mm, width=25*mm, height=25*mm)
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(4 * mm, band_y + 4.6 * mm, "SENA")
+    c.setFont("Helvetica", 5)
+    c.drawString(4 * mm, band_y + 1.9 * mm, "Servicio Nacional de Aprendizaje")
+    estado = _txt(carnet.get("estado") or user.get("estado")).upper()
+    c.setFont("Helvetica-Bold", 5.5)
+    c.drawRightString(PAGE_W - 4 * mm, band_y + 4.6 * mm, "CARNET INSTITUCIONAL")
+    c.setFont("Helvetica-Bold", 5)
+    c.drawRightString(PAGE_W - 4 * mm, band_y + 1.9 * mm, f"ESTADO: {estado}")
 
-    foto = (user.get('foto_perfil') or '').replace("\\", "/")
-    if foto:
+    # Fotografía.
+    foto_x, foto_y, foto_w, foto_h = 4 * mm, 6 * mm, 15 * mm, 19 * mm
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.5)
+    c.rect(foto_x, foto_y, foto_w, foto_h, fill=0, stroke=1)
+    foto = (user.get("foto_perfil") or "").replace("\\", "/")
+    if foto and foto != "—":
         try:
             with Image.open(foto) as photo:
                 photo.load()
                 c.drawImage(
                     ImageReader(photo.convert("RGB")),
-                    112*mm, y - 25*mm,
-                    width=22*mm, height=25*mm,
+                    foto_x + 0.6 * mm, foto_y + 0.6 * mm,
+                    width=foto_w - 1.2 * mm, height=foto_h - 1.2 * mm,
                     preserveAspectRatio=True,
-                    anchor='c',
+                    anchor="c",
                 )
-            c.setStrokeColor(HexColor("#cbd5e1"))
-            c.setLineWidth(0.75)
-            c.rect(112*mm, y - 25*mm, 22*mm, 25*mm)
         except Exception:
             pass
+
+    # Datos del titular.
+    dx = 21.5 * mm
+    dw = 35 * mm
+    nombre = f"{_txt(user.get('nombres'))} {_txt(user.get('apellidos'))}".strip()
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 7.5)
+    c.drawString(dx, 37 * mm, _fit(c, nombre, dw, "Helvetica-Bold", 7.5))
+    c.setFillColor(YELLOW)
+    c.rect(dx, 36 * mm, 12 * mm, 0.5 * mm, fill=1, stroke=0)
+
+    c.setFont("Helvetica", 5.5)
+    y = 32.5 * mm
+    filas = [
+        f"{_txt(user.get('tipo_documento'))} {_txt(user.get('numero_documento'))}",
+        f"Sangre: {_txt(user.get('tipo_sangre'))}",
+        f"Vigente hasta: {_fmt_fecha(carnet.get('fecha_vencimiento'))}",
+    ]
+    for fila in filas:
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 5.5)
+        c.drawString(dx, y, _fit(c, fila, dw, "Helvetica", 5.5))
+        y -= 3.4 * mm
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 5)
+    centro = _txt(user.get("centro_nombre"))
+    c.drawString(dx, y + 0.4 * mm, _fit(c, centro, dw, "Helvetica", 5))
+
+    # QR del sistema.
+    qr_x, qr_y, qr_s = 60 * mm, 6.5 * mm, 19 * mm
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.5)
+    c.rect(qr_x, qr_y, qr_s, qr_s, fill=0, stroke=1)
+    try:
+        qr_img = generate_qr_image(qr_token)
+        c.drawImage(
+            ImageReader(qr_img),
+            qr_x + 1 * mm, qr_y + 1 * mm,
+            width=qr_s - 2 * mm, height=qr_s - 2 * mm,
+        )
+    except Exception:
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 4.5)
+        c.drawCentredString(qr_x + qr_s / 2, qr_y + qr_s / 2, "QR no disponible")
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 4)
+    c.drawCentredString(qr_x + qr_s / 2, qr_y - 2.2 * mm, "Escanea para validar")
+
+    # Pie con código único.
+    c.setFillColor(MUTED)
+    c.setFont("Courier", 4)
+    c.drawString(4 * mm, 2.6 * mm, _fit(c, f"UUID: {_txt(carnet.get('uuid'))}", 52 * mm, "Courier", 4))
 
     c.showPage()
     c.save()

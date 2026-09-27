@@ -4,7 +4,7 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # ============================
 # ESQUEMAS DE USUARIOS
@@ -12,6 +12,25 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 # la información de entrada y salida
 # de la API.
 # ============================
+
+# Tipos de sangre aceptados por el sistema.
+TIPOS_SANGRE = ("O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-")
+
+
+def normalizar_tipo_sangre(value: Optional[str]) -> Optional[str]:
+    """Normaliza el tipo de sangre (mayúsculas, sin espacios)."""
+    if value is None:
+        return None
+    text = str(value).strip().upper().replace(" ", "")
+    return text or None
+
+
+def validar_tipo_sangre(value: Optional[str]) -> Optional[str]:
+    """Normaliza y valida estrictamente el tipo de sangre."""
+    text = normalizar_tipo_sangre(value)
+    if text is not None and text not in TIPOS_SANGRE:
+        raise ValueError(f"Tipo de sangre inválido. Valores permitidos: {', '.join(TIPOS_SANGRE)}.")
+    return text
 
 
 class UserBase(BaseModel):
@@ -55,6 +74,17 @@ class UserBase(BaseModel):
         max_length=50, 
         description="Número de documento del usuario."
     )
+
+    tipo_sangre: Optional[str] = Field(
+        None,
+        max_length=3,
+        description="Tipo de sangre del usuario (O+, O-, A+, A-, B+, B-, AB+, AB-)."
+    )
+
+    @field_validator("tipo_sangre")
+    @classmethod
+    def _validar_tipo_sangre(cls, v: Optional[str]) -> Optional[str]:
+        return validar_tipo_sangre(v)
     
     # No permite recibir campos que no existan en el esquema.
     model_config = ConfigDict(extra="forbid")
@@ -133,6 +163,17 @@ class UserUpdate(BaseModel):
         description="Indica si el usuario está activo."
     )
 
+    tipo_sangre: Optional[str] = Field(
+        None,
+        max_length=3,
+        description="Tipo de sangre del usuario (O+, O-, A+, A-, B+, B-, AB+, AB-)."
+    )
+
+    @field_validator("tipo_sangre")
+    @classmethod
+    def _validar_tipo_sangre(cls, v: Optional[str]) -> Optional[str]:
+        return validar_tipo_sangre(v)
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -162,6 +203,27 @@ class UserResponse(UserBase):
         None,
         description="URL de la foto de perfil del usuario."
     )
+
+    tipo_sangre: Optional[str] = Field(
+        None,
+        description="Tipo de sangre del usuario."
+    )
+
+    centro_id: Optional[int] = Field(
+        None,
+        description="ID del centro de formación (derivado del grupo/ficha del usuario)."
+    )
+
+    centro_nombre: Optional[str] = Field(
+        None,
+        description="Nombre del centro de formación (derivado del grupo/ficha del usuario)."
+    )
+
+    @field_validator("tipo_sangre")
+    @classmethod
+    def _normalizar_tipo_sangre(cls, v: Optional[str]) -> Optional[str]:
+        # Solo normaliza: no rechaza datos antiguos que vengan de la BD.
+        return normalizar_tipo_sangre(v)
     
     # Permite construir el esquema a partir de objetos ORM.
     model_config = ConfigDict(from_attributes=True)

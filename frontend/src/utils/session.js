@@ -1,3 +1,5 @@
+import { decodeJwt } from './jwt';
+
 export const ACCESS_KEY = 'access_token';
 export const REFRESH_KEY = 'refresh_token';
 export const USER_KEY = 'sena_user';
@@ -36,11 +38,20 @@ export function clearSession() {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
+  window.dispatchEvent(new CustomEvent('session:logout'));
 }
 
 export function hardLogout() {
+  // Solo limpia el storage y avisa: AuthContext resetea el estado React
+  // y ProtectedRoute redirige a /login de forma declarativa (sin reload,
+  // que en la PWA instalada dejaba pantallas inconsistentes).
   clearSession();
-  if (window.location.pathname !== '/login') {
-    window.location.href = '/login';
-  }
+}
+
+/** true si el JWT ya expiró (o es inválido). leewaySec da margen en segundos. */
+export function isTokenExpired(token, leewaySec = 30) {
+  if (!token) return true;
+  const payload = decodeJwt(token);
+  if (!payload || !payload.exp) return true;
+  return payload.exp * 1000 <= Date.now() + leewaySec * 1000;
 }

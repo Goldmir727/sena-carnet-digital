@@ -32,3 +32,9 @@ export function resetPassword(token, newPassword) {
     .post('/auth/reset-password', { token, new_password: newPassword })
     .then((r) => r.data);
 }
+
+export function refreshTokens(refreshToken) {
+  return api
+    .post('/auth/refresh', { refresh_token: refreshToken })
+    .then((r) => r.data);
+}

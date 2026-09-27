@@ -64,13 +64,33 @@ export function useUploadPhoto() {
 export function useImportUsersExcel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file) => {
+    mutationFn: ({ file, grupo_id }) => {
       const form = new FormData();
+      if (grupo_id !== undefined && grupo_id !== null) {
+        form.append('grupo_id', grupo_id);
+      }
       form.append('file', file);
       return api
         .post('/users/import-excel', form, { headers: { 'Content-Type': 'multipart/form-data' } })
         .then((r) => r.data);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      if (vars?.grupo_id !== undefined && vars?.grupo_id !== null) {
+        qc.invalidateQueries({ queryKey: ['grupos', vars.grupo_id, 'estudiantes'] });
+      }
+    },
   });
+}
+
+export async function downloadImportTemplate() {
+  const res = await api.get('/users/import-template', { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'plantilla_estudiantes.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

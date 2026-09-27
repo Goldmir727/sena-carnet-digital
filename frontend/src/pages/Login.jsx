@@ -9,10 +9,10 @@ import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
 export default function Login() {
-  const { user, step } = useAuth();
+  const { isAuthenticated, authReady, step } = useAuth();
   const [loginInfo, setLoginInfo] = useState(null);
 
-  if (user) return <Navigate to="/" replace />;
+  if (authReady && isAuthenticated) return <Navigate to="/" replace />;
 
   return (
     <AuthLayout

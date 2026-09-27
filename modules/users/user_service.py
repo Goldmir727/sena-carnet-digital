@@ -1,14 +1,46 @@
 # ============================
 # IMPORTACIONES
 # ============================
+from datetime import date, timedelta
+from io import BytesIO
+import uuid as uuid_lib
 from fastapi import HTTPException, status
+from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from modules.users.user_schema import UserCreate, UserUpdate
+from modules.users.user_schema import (
+    UserCreate,
+    UserUpdate,
+    TIPOS_SANGRE,
+    validar_tipo_sangre,
+)
 from modules.users.user_constants import ADMIN_ROLE
 from core.security import hash_password
+from core.config import settings
 from core.logger import logger
 from core.redis_client import cache_delete
+from services.qr_service import generate_qr_token
+
+
+def _centro_cols(alias: str) -> str:
+    """
+    Fragmento SQL que resuelve el centro de formación del usuario
+    a través de su matrícula activa más reciente:
+    matriculas -> fichas -> centros_formacion.
+
+    No existe columna de centro en users, por eso se deriva.
+    """
+    return f"""(SELECT cf.nombre FROM matriculas m
+                JOIN fichas f ON f.id = m.ficha_id
+                LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
+                WHERE m.user_id = {alias}.id AND m.status = 'activa'
+                ORDER BY m.id DESC LIMIT 1) AS centro_nombre,
+            (SELECT cf.id FROM matriculas m
+                JOIN fichas f ON f.id = m.ficha_id
+                LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
+                WHERE m.user_id = {alias}.id AND m.status = 'activa'
+                ORDER BY m.id DESC LIMIT 1) AS centro_id"""
 
 
 async def _invalidate_user_caches() -> None:
@@ -154,11 +186,14 @@ class UserService:
         """
 
         logger.info("Consultando todos los usuarios.")
-        query = text("""
+        centro = _centro_cols("users")
+        query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
+                     blood_type AS tipo_sangre,
                      photo_profile AS foto_perfil,
-                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
+                     {centro}
             FROM users WHERE user_status IN ('ACTIVE', 'ACTIVO') ORDER BY id ASC;
         """)
         result = await self.db.execute(query)
@@ -178,11 +213,14 @@ class UserService:
             HTTPException: Si el usuario no existe.
         """
         logger.info(f"Consultando usuario ID: {user_id}")
-        query = text("""
+        centro = _centro_cols("users")
+        query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
+                     blood_type AS tipo_sangre,
                      photo_profile AS foto_perfil,
-                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
+                     {centro}
             FROM users WHERE id = :id;
         """)
         result = await self.db.execute(query, {"id": user_id})
@@ -211,10 +249,13 @@ class UserService:
             list[dict]: Lista de usuarios encontrados.
         """
         logger.info(f"Buscando usuarios con: {term}")
-        query = text("""
+        centro = _centro_cols("users")
+        query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
-                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id
+                     blood_type AS tipo_sangre,
+                     (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
+                     {centro}
             FROM users
                 WHERE user_status IN ('ACTIVE', 'ACTIVO') AND (email ILIKE :term OR document ILIKE :term
                     OR name ILIKE :term OR last_name ILIKE :term
@@ -283,11 +324,12 @@ class UserService:
 
         query = text("""
             INSERT INTO users (name, last_name, document_type, document, email,
-                       password_hash, user_status, role_id, registration_date)
+                       blood_type, password_hash, user_status, role_id, registration_date)
             VALUES (:name, :last_name, :document_type, :document, :email,
-                :password_hash, 'ACTIVE', :role_id, NOW())
+                :blood_type, :password_hash, 'ACTIVE', :role_id, NOW())
             RETURNING id, email AS username, email, name AS nombres, last_name AS apellidos,
                   document_type AS tipo_documento, document AS numero_documento,
+                  blood_type AS tipo_sangre,
                       TRUE AS is_active, role_id;
         """)
         try:
@@ -299,6 +341,7 @@ class UserService:
                     "document_type": user_data.tipo_documento or "CC",
                     "document": user_data.numero_documento or user_data.username,
                     "email": user_data.email,
+                    "blood_type": user_data.tipo_sangre,
                     "password_hash": hashed_pwd,
                     "role_id": user_data.role_id,
                 },
@@ -313,18 +356,14 @@ class UserService:
                 )
                 role_row = role_res.mappings().first()
                 if role_row and role_row["name"] == "Aprendiz":
-                    from datetime import date, timedelta
-                    from core.config import settings as _settings
-                    from services.qr_service import generate_qr_token
-                    import uuid as _uuid
                     issue = date.today()
-                    exp = issue + timedelta(days=_settings.CARNET_DURATION_DAYS)
+                    exp = issue + timedelta(days=settings.CARNET_DURATION_DAYS)
                     await self.db.execute(
                         text(
                             "INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date) "
                             "VALUES (:u, :q, :i, :e);"
                         ),
-                        {"u": created["id"], "q": generate_qr_token(str(_uuid.uuid4())), "i": issue, "e": exp},
+                        {"u": created["id"], "q": generate_qr_token(str(uuid_lib.uuid4())), "i": issue, "e": exp},
                     )
                     await self.db.commit(); await _invalidate_user_caches()
             except Exception:
@@ -409,6 +448,7 @@ class UserService:
             "apellidos": "last_name",
             "tipo_documento": "document_type",
             "numero_documento": "document",
+            "tipo_sangre": "blood_type",
         }
 
         for attr, col in field_map.items():
@@ -459,17 +499,16 @@ class UserService:
         query_str = f"""
             UPDATE users
             SET {', '.join(update_fields)}
-            WHERE id = :id
-            RETURNING id, email AS username, email, name AS nombres, last_name AS apellidos,
-                      document_type AS tipo_documento, document AS numero_documento,
-                      photo_profile AS foto_perfil,
-                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id;
+            WHERE id = :id;
         """
 
         try:
-            result = await self.db.execute(text(query_str), params)
+            await self.db.execute(text(query_str), params)
             await self.db.commit(); await _invalidate_user_caches()
-            return dict(result.mappings().first())
+            # Releer con la forma completa (incluye tipo_sangre y centro).
+            return await self.get_user_by_id(target_user_id)
+        except HTTPException:
+            raise
         except Exception:
             await self.db.rollback()
             logger.exception("Error al actualizar usuario.")
@@ -559,6 +598,7 @@ class UserService:
     # ============================
     # CARGA MASIVA EXCEL
     # Acepta el .xlsx original del profe con alias en español.
+    # Con grupo_id (endpoint), además matricula Aprendices en el grupo.
     # ============================
 
     async def import_users_excel(self, contenido: bytes) -> dict:
@@ -574,6 +614,7 @@ class UserService:
         - Usuario: username, usuario
         - Clave: password, contraseña, contrasena (si falta, se usa el documento)
         - Rol: role_id, rol (id numérico o nombre: Aprendiz/Docente/...)
+        - Sangre: tipo_sangre, sangre, grupo_sanguineo (opcional: O+, O-, A+, ...)
         """
         import unicodedata
         from io import BytesIO
@@ -593,6 +634,7 @@ class UserService:
             "username": {"username", "usuario", "user"},
             "password": {"password", "contrasena", "clave"},
             "rol": {"role_id", "rol", "role"},
+            "tipo_sangre": {"tipo_sangre", "sangre", "grupo_sanguineo"},
         }
 
         try:
@@ -659,12 +701,17 @@ class UserService:
                     raise ValueError(f"usuario '{username}' ya existe")
                 password = val("password") or documento
 
+                try:
+                    sangre = validar_tipo_sangre(val("tipo_sangre") or None)
+                except ValueError as e:
+                    raise ValueError(str(e))
+
                 await self.db.execute(
                     text("""
                         INSERT INTO users (name, last_name, document_type, document, email,
-                                   password_hash, user_status, role_id, registration_date)
+                                   blood_type, password_hash, user_status, role_id, registration_date)
                         VALUES (:name, :last_name, :document_type, :document, :email,
-                            :password_hash, 'ACTIVE', :role_id, NOW());
+                            :blood_type, :password_hash, 'ACTIVE', :role_id, NOW());
                     """),
                     {
                         "name": nombres,
@@ -672,6 +719,7 @@ class UserService:
                         "document_type": val("tipo_documento") or "CC",
                         "document": documento,
                         "email": correo,
+                        "blood_type": sangre,
                         "password_hash": hash_password(password),
                         "role_id": role_id,
                     },
@@ -694,3 +742,181 @@ class UserService:
             "procesados": procesados, "insertados": insertados,
             "errores": errores, "duplicados": duplicados, "detalle": detalle,
         }
+
+    # ============================
+    # MATRÍCULA DE IMPORTADOS EN UN GRUPO
+    # Se usa cuando POST /users/import-excel recibe grupo_id.
+    # ============================
+
+    async def asignar_importados_a_grupo(
+        self, grupo_id: int, detalle: list[dict]
+    ) -> dict:
+        """
+        Matricula en el grupo a los Aprendiz del detalle de importación.
+
+        - Usuarios nuevos (insertado): asegura carnet activo y matricula.
+        - Usuarios existentes (duplicado por documento): reutiliza solo si
+          el rol es Aprendiz; con otro rol se reporta como error de fila.
+        - Devuelve conteos compatibles con el resumen del frontend de grupos.
+        """
+        logger.info(f"Asignando importados al grupo ID: {grupo_id}")
+
+        grupo = await self.db.execute(
+            text("SELECT id FROM fichas WHERE id = :id"), {"id": grupo_id}
+        )
+        if not grupo.first():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Grupo no encontrado."
+            )
+
+        rol = await self.db.execute(
+            text("SELECT id FROM roles WHERE name = 'Aprendiz' LIMIT 1;")
+        )
+        rol_row = rol.mappings().first()
+        if not rol_row:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No existe el rol Aprendiz en el sistema.",
+            )
+        aprendiz_id = rol_row["id"]
+
+        creados = existentes = asignados = ya_en_grupo = 0
+        errores: list[dict] = []
+
+        try:
+            for item in detalle or []:
+                estado = item.get("estado")
+                if estado not in ("insertado", "duplicado"):
+                    continue
+                fila = item.get("fila")
+                documento = item.get("documento") or ""
+
+                user_res = await self.db.execute(
+                    text("SELECT id, role_id FROM users WHERE document = :doc;"),
+                    {"doc": documento},
+                )
+                user_row = user_res.mappings().first()
+                if user_row is None:
+                    errores.append({"fila": fila, "documento": documento or None,
+                                    "error": "No se encontró tras importar."})
+                    continue
+                if user_row["role_id"] != aprendiz_id:
+                    rol_check = await self.db.execute(
+                        text("SELECT name FROM roles WHERE id = :rid;"),
+                        {"rid": user_row["role_id"]},
+                    )
+                    rol_nombre = (rol_check.mappings().first() or {}).get("name")
+                    errores.append({"fila": fila, "documento": documento,
+                                    "error": f"Existe con rol {rol_nombre or 'desconocido'}; solo Aprendiz entra al grupo."})
+                    continue
+
+                user_id = user_row["id"]
+                if estado == "insertado":
+                    creados += 1
+                    carnet = await self.db.execute(
+                        text("SELECT id FROM carnets WHERE user_id = :uid "
+                             "AND expiration_date >= CURRENT_DATE LIMIT 1;"),
+                        {"uid": user_id},
+                    )
+                    if not carnet.first():
+                        issue = date.today()
+                        exp = issue + timedelta(days=settings.CARNET_DURATION_DAYS)
+                        await self.db.execute(
+                            text("INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date) "
+                                 "VALUES (:u, :q, :i, :e);"),
+                            {"u": user_id, "q": generate_qr_token(str(uuid_lib.uuid4())),
+                             "i": issue, "e": exp},
+                        )
+                else:
+                    existentes += 1
+
+                mat = await self.db.execute(
+                    text("SELECT 1 FROM matriculas WHERE ficha_id = :g AND user_id = :u;"),
+                    {"g": grupo_id, "u": user_id},
+                )
+                if mat.first() is not None:
+                    ya_en_grupo += 1
+                else:
+                    await self.db.execute(
+                        text("INSERT INTO matriculas (ficha_id, user_id, status) "
+                             "VALUES (:g, :u, 'activa');"),
+                        {"g": grupo_id, "u": user_id},
+                    )
+                    asignados += 1
+
+            await self.db.commit()
+        except HTTPException:
+            raise
+        except Exception:
+            await self.db.rollback()
+            logger.exception("Error al matricular importados; se revirtió la matrícula.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al asignar al grupo. Los usuarios creados se conservan.",
+            )
+
+        await _invalidate_user_caches()
+        try:
+            from modules.grupos.grupo_service import invalidate_grupo_cache
+            await invalidate_grupo_cache(grupo_id)
+        except Exception:
+            pass
+        return {
+            "creados": creados,
+            "existentes": existentes,
+            "asignados": asignados,
+            "ya_en_grupo": ya_en_grupo,
+            "errores": errores,
+        }
+
+
+def generar_plantilla_excel() -> BytesIO:
+    """
+    Genera la plantilla .xlsx para la importación masiva de estudiantes.
+
+    Solo contiene el encabezado con las columnas esperadas, validaciones
+    desplegables y anchos ajustados. Sin filas de ejemplo para evitar
+    importaciones accidentales.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Estudiantes"
+    headers = [
+        "nombres",
+        "apellidos",
+        "tipo_documento",
+        "numero_documento",
+        "email",
+        "tipo_sangre",
+    ]
+    ws.append(headers)
+    widths = [25, 25, 16, 20, 32, 14]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    dv_doc = DataValidation(
+        type="list",
+        formula1='"CC,CE,TI,PEP"',
+        allow_blank=True,
+        showErrorMessage=True,
+        errorTitle="Tipo inválido",
+        error="Use: CC, CE, TI, PEP",
+    )
+    ws.add_data_validation(dv_doc)
+    dv_doc.add("C2:C1001")
+
+    dv_sangre = DataValidation(
+        type="list",
+        formula1=f'"{",".join(TIPOS_SANGRE)}"',
+        allow_blank=True,
+        showErrorMessage=True,
+        errorTitle="Tipo inválido",
+        error=f"Use: {', '.join(TIPOS_SANGRE)}",
+    )
+    ws.add_data_validation(dv_sangre)
+    dv_sangre.add("F2:F1001")
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer

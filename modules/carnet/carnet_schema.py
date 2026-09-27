@@ -23,3 +23,6 @@ class CarnetDetailResponse(CarnetResponse):
     usuario_nombre: Optional[str] = None
     usuario_documento: Optional[str] = None
     usuario_email: Optional[str] = None
+    tipo_sangre: Optional[str] = None
+    centro_id: Optional[int] = None
+    centro_nombre: Optional[str] = None

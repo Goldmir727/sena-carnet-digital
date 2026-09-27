@@ -5,6 +5,8 @@ export const ROLE_PERMISSIONS = {
     'users.write',
     'grupos.read',
     'grupos.write',
+    'centros.read',
+    'centros.write',
     'carnet.view',
     'carnet.write',
     'qr.carnet',
