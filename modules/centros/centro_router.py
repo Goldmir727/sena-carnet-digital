@@ -10,10 +10,11 @@ router = APIRouter(prefix="/centros", tags=["Centros"])
 
 @router.get("/", response_model=list[CentroResponse])
 async def list_centros(
+    regional: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_coordinador_user),
 ):
-    return await CentroService(db).get_all()
+    return await CentroService(db).get_all(regional)
 
 
 @router.post("/", response_model=CentroResponse, status_code=status.HTTP_201_CREATED)

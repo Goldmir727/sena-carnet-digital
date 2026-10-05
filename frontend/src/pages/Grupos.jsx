@@ -11,6 +11,7 @@ import { useGrupos,
   useAsignarDocentes,
 } from '../api/grupos';
 import { useCentros } from '../api/centros';
+import { useRegionales, useCentrosByRegional } from '../api/regionales';
 import { useProgramas } from '../api/programas';
 import { useUsers, useImportUsersExcel, downloadImportTemplate } from '../api/users';
 import { getErr } from '../lib/errors';
@@ -41,7 +42,7 @@ export default function Grupos() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nombre: '', descripcion: '', centro_id: '', programa_id: '', director_id: '' });
+  const [form, setForm] = useState({ nombre: '', descripcion: '', regional: '', centro_id: '', programa_id: '', director_id: '' });
   const [formErrors, setFormErrors] = useState({});
   const [confirm, setConfirm] = useState(null);
 
@@ -76,8 +77,11 @@ export default function Grupos() {
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const regionalesQuery = useRegionales();
+  const centrosPorRegional = useCentrosByRegional(form.regional || undefined);
+
   const openCreate = () => {
-    setForm({ nombre: '', descripcion: '', centro_id: '', programa_id: '', director_id: '' });
+    setForm({ nombre: '', descripcion: '', regional: '', centro_id: '', programa_id: '', director_id: '' });
     setFormErrors({});
     setCreateOpen(true);
   };
@@ -86,6 +90,7 @@ export default function Grupos() {
     setForm({
       nombre: row.nombre || '',
       descripcion: row.descripcion || '',
+      regional: row.centro_id ? centrosById[row.centro_id]?.regional || '' : '',
       centro_id: row.centro_id || '',
       programa_id: row.programa_id || '',
       director_id: row.director_id || row.coordinador_id || '',
@@ -99,6 +104,8 @@ export default function Grupos() {
     const errs = {};
     if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio';
     else if (form.nombre.trim().length < 3) errs.nombre = 'Mínimo 3 caracteres';
+    if (!editing && !form.regional) errs.regional = 'Selecciona la regional';
+    if (!editing && !form.centro_id) errs.centro_id = 'Selecciona el centro';
     if (!editing && !form.programa_id) errs.programa_id = 'Selecciona el programa';
     if (Object.keys(errs).length) {
       setFormErrors(errs);
@@ -353,11 +360,11 @@ export default function Grupos() {
       >
         <div className="space-y-4">
           <Input
-            label="Nombre del grupo"
+            label="Número de ficha"
             value={form.nombre}
             onChange={set('nombre')}
             error={formErrors.nombre}
-            placeholder="Ej. Ficha 2894567"
+            placeholder="Ej. 2670001"
           />
           <Textarea
             label="Descripción"
@@ -366,6 +373,44 @@ export default function Grupos() {
             placeholder="Detalles opcionales del grupo"
             rows={3}
           />
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Regional</span>
+            <select
+              value={form.regional}
+              onChange={(e) => setForm((f) => ({ ...f, regional: e.target.value, centro_id: '' }))}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green"
+            >
+              <option value="">Selecciona una regional</option>
+              {(regionalesQuery.data || []).map((r) => (
+                <option key={r.name} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            {formErrors.regional && <p className="mt-1 text-xs text-red-600">{formErrors.regional}</p>}
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Centro de formación</span>
+            <select
+              value={form.centro_id}
+              onChange={set('centro_id')}
+              disabled={!form.regional}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <option value="">
+                {!form.regional
+                  ? 'Selecciona primero una regional'
+                  : (centrosPorRegional.data || []).length === 0
+                    ? 'Esta regional no tiene centros disponibles.'
+                    : 'Selecciona un centro'}
+              </option>
+              {(centrosPorRegional.data || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} ({c.codigo})
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">Programa de formación</span>
             <select
@@ -381,21 +426,6 @@ export default function Grupos() {
               ))}
             </select>
             {formErrors.programa_id && <p className="mt-1 text-xs text-red-600">{formErrors.programa_id}</p>}
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-700">Centro de formación</span>
-            <select
-              value={form.centro_id}
-              onChange={set('centro_id')}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green"
-            >
-              <option value="">Sin centro</option>
-              {(centrosQuery.data || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre} ({c.codigo})
-                </option>
-              ))}
-            </select>
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">Director (opcional)</span>

@@ -14,7 +14,17 @@ class CentroService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_all(self) -> list[dict]:
+    async def get_all(self, regional: str | None = None) -> list[dict]:
+        if regional:
+            result = await self.db.execute(
+                text("""
+                    SELECT id, codigo, nombre, regional, ciudad,
+                           direccion, telefono, email, status
+                    FROM centros_formacion WHERE regional = :regional ORDER BY id ASC;
+                """),
+                {"regional": regional},
+            )
+            return [dict(r) for r in result.mappings().all()]
         cached = await cache_get("centros:all")
         if cached is not None:
             return cached
