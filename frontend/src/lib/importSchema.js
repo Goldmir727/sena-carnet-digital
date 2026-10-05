@@ -2,7 +2,7 @@
 // Espejo frontend de EXCEL_ALIAS (modules/users/user_service.py):
 // si se agregan alias allá, agregarlos aquí para la vista previa.
 export const COLUMNAS_REQUERIDAS = ['nombres', 'apellidos', 'numero_documento', 'email'];
-export const COLUMNAS_OPCIONALES = ['tipo_documento', 'tipo_sangre'];
+export const COLUMNAS_OPCIONALES = ['tipo_documento', 'tipo_sangre', 'ficha'];
 export const COLUMNAS_TODAS = [...COLUMNAS_REQUERIDAS, ...COLUMNAS_OPCIONALES];
 
 export const ALIASES = {
@@ -15,6 +15,7 @@ export const ALIASES = {
   email: ['email', 'correo', 'correo_electronico', 'mail', 'e-mail'],
   tipo_documento: ['tipo_documento', 'tipo_doc', 'tipodoc'],
   tipo_sangre: ['tipo_sangre', 'sangre', 'grupo_sanguineo', 'rh'],
+  ficha: ['ficha', 'numero_ficha', 'numero de ficha', 'numero_de_ficha', 'número de ficha', 'num_ficha', 'ficha_numero'],
 };
 
 export const TIPOS_DOC = ['CC', 'CE', 'TI', 'PEP'];

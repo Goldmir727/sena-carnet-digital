@@ -146,6 +146,12 @@ async def import_users_excel(
     if grupo_id is not None:
         extra = await service.asignar_importados_a_grupo(grupo_id, resultado.get("detalle", []))
         resultado.update(extra)
+    else:
+        # Si el Excel trae columna ficha/numero_ficha, matricular por número de ficha.
+        usa_ficha = any((d.get("ficha") or d.get("ficha_id")) for d in resultado.get("detalle", []))
+        if usa_ficha:
+            extra = await service.asignar_importados_a_fichas(resultado.get("detalle", []))
+            resultado.update(extra)
     return resultado
 
 

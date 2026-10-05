@@ -635,6 +635,7 @@ class UserService:
             "password": {"password", "contrasena", "clave"},
             "rol": {"role_id", "rol", "role"},
             "tipo_sangre": {"tipo_sangre", "sangre", "grupo_sanguineo"},
+            "ficha": {"ficha", "numero_ficha", "numero_de_ficha", "num_ficha", "n_ficha", "ficha_numero"},
         }
 
         try:
@@ -663,6 +664,23 @@ class UserService:
         roles = await self.db.execute(text("SELECT id, name FROM roles;"))
         rol_por_nombre = {r["name"].strip().lower(): r["id"] for r in roles.mappings().all()}
 
+        # Mapa ficha (número) -> ficha_id, resuelto en una sola consulta
+        # para no consultar la BD por cada fila.
+        fichas_map: dict[str, int] = {}
+        if "ficha" in col:
+            ficha_vals: set[str] = set()
+            for r in rows[1:]:
+                v = r[col["ficha"]] if col["ficha"] < len(r) else None
+                if v is not None and str(v).strip():
+                    ficha_vals.add(str(v).strip())
+            if ficha_vals:
+                res = await self.db.execute(
+                    text("SELECT id, number FROM fichas WHERE number = ANY(:nums);"),
+                    {"nums": list(ficha_vals)},
+                )
+                for row in res.mappings().all():
+                    fichas_map[str(row["number"]).strip()] = row["id"]
+
         procesados = insertados = errores = duplicados = 0
         detalle: list[dict] = []
         for n, r in enumerate(rows[1:], start=2):
@@ -679,9 +697,18 @@ class UserService:
                 nombres, apellidos = val("nombres"), val("apellidos") or "-"
                 if not documento or not correo or not nombres:
                     raise ValueError("Documento, Correo y Nombres son obligatorios")
+
+                ficha_raw = val("ficha")
+                ficha_id = None
+                if ficha_raw:
+                    ficha_id = fichas_map.get(ficha_raw)
+                    if ficha_id is None:
+                        raise ValueError(f"La ficha {ficha_raw} no existe.")
+
                 if await self._document_exists(documento) or await self._email_exists(correo):
                     duplicados += 1
-                    detalle.append({"fila": n, "estado": "duplicado", "documento": documento})
+                    detalle.append({"fila": n, "estado": "duplicado", "documento": documento,
+                                    "ficha": ficha_raw or None, "ficha_id": ficha_id})
                     continue
 
                 rol_raw = val("rol")
@@ -725,7 +752,8 @@ class UserService:
                     },
                 )
                 insertados += 1
-                detalle.append({"fila": n, "estado": "insertado", "documento": documento})
+                detalle.append({"fila": n, "estado": "insertado", "documento": documento,
+                                "ficha": ficha_raw or None, "ficha_id": ficha_id})
             except HTTPException:
                 raise
             except Exception as e:
@@ -735,7 +763,8 @@ class UserService:
                     doc = str(r[col["documento"]] or "").strip()
                 except Exception:
                     pass
-                detalle.append({"fila": n, "estado": "error", "documento": doc, "mensaje": str(e)})
+                detalle.append({"fila": n, "estado": "error", "documento": doc, "mensaje": str(e),
+                                "ficha": val("ficha") or None})
 
         await self.db.commit(); await _invalidate_user_caches()
         return {
@@ -791,6 +820,12 @@ class UserService:
                 fila = item.get("fila")
                 documento = item.get("documento") or ""
 
+                # Si el Excel trajo columna ficha, debe coincidir con el grupo_id.
+                if item.get("ficha_id") is not None and item["ficha_id"] != grupo_id:
+                    errores.append({"fila": fila, "documento": documento,
+                                    "error": f"La ficha del Excel ({item.get('ficha')}) no coincide con el grupo seleccionado."})
+                    continue
+
                 user_res = await self.db.execute(
                     text("SELECT id, role_id FROM users WHERE document = :doc;"),
                     {"doc": documento},
@@ -837,6 +872,17 @@ class UserService:
                 if mat.first() is not None:
                     ya_en_grupo += 1
                 else:
+                    # Conflicto: si ya está matriculado activamente en OTRA ficha, reportar.
+                    otra = await self.db.execute(
+                        text("SELECT f.number FROM matriculas m JOIN fichas f ON f.id = m.ficha_id "
+                             "WHERE m.user_id = :u AND m.status = 'activa' AND m.ficha_id != :g LIMIT 1;"),
+                        {"u": user_id, "g": grupo_id},
+                    )
+                    otra_row = otra.mappings().first()
+                    if otra_row is not None:
+                        errores.append({"fila": fila, "documento": documento,
+                                        "error": f"El aprendiz ya está matriculado en otra ficha ({otra_row['number']})."})
+                        continue
                     await self.db.execute(
                         text("INSERT INTO matriculas (ficha_id, user_id, status) "
                              "VALUES (:g, :u, 'activa');"),
@@ -866,6 +912,116 @@ class UserService:
             "existentes": existentes,
             "asignados": asignados,
             "ya_en_grupo": ya_en_grupo,
+            "errores": errores,
+        }
+
+    # ============================
+    # MATRÍCULA DE IMPORTADOS POR NÚMERO DE FICHA
+    # Se usa cuando el Excel trae la columna ficha/numero_ficha
+    # y no se envía grupo_id.
+    # ============================
+
+    async def asignar_importados_a_fichas(self, detalle: list[dict]) -> dict:
+        logger.info("Asignando importados por número de ficha.")
+
+        rol = await self.db.execute(text("SELECT id FROM roles WHERE name = 'Aprendiz' LIMIT 1;"))
+        rol_row = rol.mappings().first()
+        if not rol_row:
+            raise HTTPException(status_code=500, detail="No existe el rol Aprendiz en el sistema.")
+        aprendiz_id = rol_row["id"]
+
+        creados = existentes = asignados = ya_en_ficha = 0
+        errores: list[dict] = []
+
+        try:
+            for item in detalle or []:
+                estado = item.get("estado")
+                if estado not in ("insertado", "duplicado"):
+                    continue
+                fila = item.get("fila")
+                documento = item.get("documento") or ""
+                ficha_id = item.get("ficha_id")
+                if ficha_id is None:
+                    # Sin ficha en la fila: el usuario se creó pero no se matricula.
+                    continue
+
+                user_res = await self.db.execute(
+                    text("SELECT id, role_id FROM users WHERE document = :doc;"), {"doc": documento}
+                )
+                user_row = user_res.mappings().first()
+                if user_row is None:
+                    errores.append({"fila": fila, "documento": documento, "error": "No se encontró tras importar."})
+                    continue
+                if user_row["role_id"] != aprendiz_id:
+                    rol_check = await self.db.execute(
+                        text("SELECT name FROM roles WHERE id = :rid;"), {"rid": user_row["role_id"]}
+                    )
+                    rol_nombre = (rol_check.mappings().first() or {}).get("name")
+                    errores.append({"fila": fila, "documento": documento,
+                                    "error": f"Existe con rol {rol_nombre or 'desconocido'}; solo Aprendiz se matricula."})
+                    continue
+
+                user_id = user_row["id"]
+                if estado == "insertado":
+                    creados += 1
+                    carnet = await self.db.execute(
+                        text("SELECT id FROM carnets WHERE user_id = :uid AND expiration_date >= CURRENT_DATE LIMIT 1;"),
+                        {"uid": user_id},
+                    )
+                    if not carnet.first():
+                        issue = date.today()
+                        exp = issue + timedelta(days=settings.CARNET_DURATION_DAYS)
+                        await self.db.execute(
+                            text("INSERT INTO carnets (user_id, qr_code, issue_date, expiration_date) VALUES (:u, :q, :i, :e);"),
+                            {"u": user_id, "q": generate_qr_token(str(uuid_lib.uuid4())), "i": issue, "e": exp},
+                        )
+                else:
+                    existentes += 1
+
+                mat = await self.db.execute(
+                    text("SELECT 1 FROM matriculas WHERE ficha_id = :g AND user_id = :u;"),
+                    {"g": ficha_id, "u": user_id},
+                )
+                if mat.first() is not None:
+                    ya_en_ficha += 1
+                    continue
+
+                otra = await self.db.execute(
+                    text("SELECT f.number FROM matriculas m JOIN fichas f ON f.id = m.ficha_id "
+                         "WHERE m.user_id = :u AND m.status = 'activa' AND m.ficha_id != :g LIMIT 1;"),
+                    {"u": user_id, "g": ficha_id},
+                )
+                otra_row = otra.mappings().first()
+                if otra_row is not None:
+                    errores.append({"fila": fila, "documento": documento,
+                                    "error": f"El aprendiz ya está matriculado en otra ficha ({otra_row['number']})."})
+                    continue
+
+                await self.db.execute(
+                    text("INSERT INTO matriculas (ficha_id, user_id, status) VALUES (:g, :u, 'activa');"),
+                    {"g": ficha_id, "u": user_id},
+                )
+                asignados += 1
+
+            await self.db.commit()
+        except HTTPException:
+            raise
+        except Exception:
+            await self.db.rollback()
+            logger.exception("Error al matricular importados por ficha.")
+            raise HTTPException(status_code=500, detail="Error al asignar a la ficha. Los usuarios creados se conservan.")
+
+        await _invalidate_user_caches()
+        try:
+            from modules.grupos.grupo_service import invalidate_grupo_cache
+            await invalidate_grupo_cache()
+        except Exception:
+            pass
+        return {
+            "creados": creados,
+            "existentes": existentes,
+            "asignados": asignados,
+            "ya_en_ficha": ya_en_ficha,
             "errores": errores,
         }
 

@@ -11,9 +11,10 @@ import { useGrupos,
   useAsignarDocentes,
 } from '../api/grupos';
 import { useCentros } from '../api/centros';
+import { useProgramas } from '../api/programas';
 import { useUsers, useImportUsersExcel, downloadImportTemplate } from '../api/users';
-import { mapHeaders, validatePreviewRows, COLUMNAS_TODAS } from '../lib/importSchema';
 import { getErr } from '../lib/errors';
+import ExcelImportPreview from '../components/import/ExcelImportPreview';
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -32,6 +33,7 @@ const parserDate = (iso) =>
 export default function Grupos() {
   const gruposQuery = useGrupos();
   const centrosQuery = useCentros();
+  const programasQuery = useProgramas();
   const centrosById = Object.fromEntries((centrosQuery.data || []).map((c) => [c.id, c]));
   const createGrupo = useCreateGrupo();
   const updateGrupo = useUpdateGrupo();
@@ -39,7 +41,7 @@ export default function Grupos() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nombre: '', descripcion: '', centro_id: '' });
+  const [form, setForm] = useState({ nombre: '', descripcion: '', centro_id: '', programa_id: '', director_id: '' });
   const [formErrors, setFormErrors] = useState({});
   const [confirm, setConfirm] = useState(null);
 
@@ -75,13 +77,19 @@ export default function Grupos() {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const openCreate = () => {
-    setForm({ nombre: '', descripcion: '', centro_id: '' });
+    setForm({ nombre: '', descripcion: '', centro_id: '', programa_id: '', director_id: '' });
     setFormErrors({});
     setCreateOpen(true);
   };
 
   const openEdit = (row) => {
-    setForm({ nombre: row.nombre || '', descripcion: row.descripcion || '', centro_id: row.centro_id || '' });
+    setForm({
+      nombre: row.nombre || '',
+      descripcion: row.descripcion || '',
+      centro_id: row.centro_id || '',
+      programa_id: row.programa_id || '',
+      director_id: row.director_id || row.coordinador_id || '',
+    });
     setFormErrors({});
     setEditing(row);
     setCreateOpen(true);
@@ -91,6 +99,7 @@ export default function Grupos() {
     const errs = {};
     if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio';
     else if (form.nombre.trim().length < 3) errs.nombre = 'Mínimo 3 caracteres';
+    if (!editing && !form.programa_id) errs.programa_id = 'Selecciona el programa';
     if (Object.keys(errs).length) {
       setFormErrors(errs);
       return;
@@ -99,6 +108,8 @@ export default function Grupos() {
       nombre: form.nombre.trim(),
       ...(form.descripcion.trim() && { descripcion: form.descripcion.trim() }),
       ...(form.centro_id && { centro_id: Number(form.centro_id) }),
+      ...(form.programa_id && { programa_id: Number(form.programa_id) }),
+      ...(form.director_id && { director_id: Number(form.director_id) }),
     };
     try {
       if (editing) {
@@ -179,53 +190,6 @@ export default function Grupos() {
     }
   };
 
-  // Dropzone: lee el .xlsx en el navegador (exceljs) solo para la
-  // vista previa local. El envío real es el archivo original en un
-  // único POST multipart; el backend revalida todo autoritativamente.
-  const onPickImportFile = async (e) => {
-    const f = e.target.files?.[0] || null;
-    setImportFile(f);
-    setImportResult(null);
-    setPreview(null);
-    if (!f) return;
-    if (!/\.xlsx$/i.test(f.name)) {
-      setPreview({ error: 'El archivo debe tener extensión .xlsx' });
-      return;
-    }
-    setPreviewLoading(true);
-    try {
-      const { default: ExcelJS } = await import('exceljs/dist/exceljs.min.js');
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(await f.arrayBuffer());
-      const ws = wb.worksheets[0];
-      if (!ws) {
-        setPreview({ error: 'El archivo no tiene hojas.' });
-        return;
-      }
-      const all = [];
-      ws.eachRow({ includeEmpty: false }, (row) => {
-        all.push((row.values || []).slice(1).map((v) => (v === null || v === undefined ? '' : String(v).trim())));
-      });
-      if (!all.length) {
-        setPreview({ error: 'El archivo está vacío.' });
-        return;
-      }
-      const { idx, faltantes } = mapHeaders(all[0]);
-      const data = [];
-      all.slice(1).forEach((cells, i) => {
-        if (cells.every((c) => !c)) return;
-        const r = { _key: i, _fila: i + 2 };
-        for (const [canonica, j] of Object.entries(idx)) r[canonica] = cells[j] || '';
-        data.push(r);
-      });
-      setPreview({ rows: validatePreviewRows(data), faltantes, total: data.length });
-    } catch {
-      setPreview({ error: 'No se pudo leer el archivo. Debe ser un .xlsx válido.' });
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
   const onImport = async () => {
     if (!importFile) {
       toast.error('Selecciona un archivo .xlsx');
@@ -272,6 +236,11 @@ export default function Grupos() {
           {r.centro_id ? centrosById[r.centro_id]?.nombre || `Centro ${r.centro_id}` : '—'}
         </span>
       ),
+    },
+    {
+      key: 'programa',
+      label: 'Programa',
+      render: (r) => <span className="text-slate-600">{r.programa_nombre || '—'}</span>,
     },
     {
       key: 'created_at',
@@ -341,9 +310,11 @@ export default function Grupos() {
         icon={Users}
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Grupos' }]}
         actions={
-          <Button icon={Plus} onClick={openCreate}>
-            Nuevo grupo
-          </Button>
+          <div className="flex gap-2">
+            <Button icon={Plus} onClick={openCreate}>
+              Nuevo grupo
+            </Button>
+          </div>
         }
       />
 
@@ -396,6 +367,22 @@ export default function Grupos() {
             rows={3}
           />
           <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Programa de formación</span>
+            <select
+              value={form.programa_id}
+              onChange={set('programa_id')}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green"
+            >
+              <option value="">Selecciona un programa</option>
+              {(programasQuery.data || []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.level ? ` · ${p.level}` : ''}
+                </option>
+              ))}
+            </select>
+            {formErrors.programa_id && <p className="mt-1 text-xs text-red-600">{formErrors.programa_id}</p>}
+          </label>
+          <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">Centro de formación</span>
             <select
               value={form.centro_id}
@@ -408,6 +395,23 @@ export default function Grupos() {
                   {c.nombre} ({c.codigo})
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Director (opcional)</span>
+            <select
+              value={form.director_id}
+              onChange={set('director_id')}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sena-green"
+            >
+              <option value="">Sin director asignado</option>
+              {(Array.isArray(usersQuery.data) ? usersQuery.data : [])
+                .filter((u) => u.role_id === 1 || u.role_id === 2 || u.role === 'Coordinador' || u.role === 'Docente')
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombres || u.name || u.username} · {u.role || (u.role_id === 1 ? 'Coordinador' : 'Docente')}
+                  </option>
+                ))}
             </select>
           </label>
         </div>
@@ -576,57 +580,19 @@ export default function Grupos() {
             </p>
             <p className="mt-1">También se aceptan: Documento, Correo, Nombre, Apellido. La contraseña inicial de cada cuenta nueva será su número de documento. Los usuarios existentes se reutilizan sin duplicarse.</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={onPickImportFile}
-              className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-sena-tint-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-sena-green-dark hover:file:bg-sena-tint-200"
-            />
+          <div className="flex justify-end">
             <Button size="sm" variant="outline" icon={Download} onClick={onDownloadTemplate}>
               Plantilla
             </Button>
           </div>
-          {previewLoading && <p className="text-xs text-slate-400">Leyendo archivo para la vista previa…</p>}
-          {preview?.error && (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{preview.error}</p>
-          )}
-          {(preview?.faltantes || []).length > 0 && (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-              Faltan columnas obligatorias: {preview.faltantes.join(', ')}. Columnas esperadas: {COLUMNAS_TODAS.join(', ')}.
-            </p>
-          )}
-          {preview?.rows && (preview.faltantes || []).length === 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-500">
-                Vista previa local ({preview.rows.filter((r) => r._ok).length} válidas,{' '}
-                {preview.rows.filter((r) => !r._ok).length} con error de {preview.total} filas).
-                Las filas con error se omitirán al importar.
-              </p>
-              <Table
-                columns={[
-                  { key: '_fila', label: 'Fila', render: (r) => <span className="text-slate-500">{r._fila}</span> },
-                  { key: 'numero_documento', label: 'Documento', render: (r) => <span className="font-mono text-xs text-sena-ink">{r.numero_documento || '—'}</span> },
-                  { key: 'nombre', label: 'Nombre', render: (r) => <span className="text-slate-600">{`${r.nombres || ''} ${r.apellidos || ''}`.trim() || '—'}</span> },
-                  { key: 'email', label: 'Correo', render: (r) => <span className="text-slate-600">{r.email || '—'}</span> },
-                  {
-                    key: 'estado',
-                    label: 'Estado',
-                    align: 'right',
-                    render: (r) => (r._ok ? <Badge variant="green">Válida</Badge> : <Badge variant="red" title={r._error}>Error</Badge>),
-                  },
-                ]}
-                rows={preview.rows.slice(0, 8)}
-                loading={false}
-                emptyTitle="Sin filas"
-                emptyMessage="El archivo no tiene filas con datos."
-                keyField="_key"
-              />
-              {preview.total > 8 && (
-                <p className="text-xs text-slate-400">…y {preview.total - 8} fila(s) más. Se validarán todas al importar.</p>
-              )}
-            </div>
-          )}
+          <ExcelImportPreview
+            onReady={({ file, preview: p, previewLoading: l }) => {
+              setImportFile(file);
+              setPreview(p);
+              setPreviewLoading(l);
+              if (!file) setImportResult(null);
+            }}
+          />
           {importResult && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

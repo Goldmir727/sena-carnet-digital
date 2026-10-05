@@ -69,12 +69,16 @@ class GrupoService:
             SELECT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
                    f.centro_id AS centro_id,
+                   f.programa_id AS programa_id,
+                   p.name AS programa_nombre,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at,
                    f.director_id AS coordinador_id,
+                   f.director_id AS director_id,
                    u.email AS coordinador_username,
                    u.email AS coordinador_email
             FROM fichas f
             LEFT JOIN users u ON u.id = f.director_id
+            LEFT JOIN programa_formacion p ON p.id = f.programa_id
             ORDER BY f.id ASC;
         """)
         result = await self.db.execute(query)
@@ -88,12 +92,16 @@ class GrupoService:
             SELECT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
                    f.centro_id AS centro_id,
+                   f.programa_id AS programa_id,
+                   p.name AS programa_nombre,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at,
                    f.director_id AS coordinador_id,
+                   f.director_id AS director_id,
                    u.email AS coordinador_username,
                    u.email AS coordinador_email
             FROM fichas f
             LEFT JOIN users u ON u.id = f.director_id
+            LEFT JOIN programa_formacion p ON p.id = f.programa_id
             WHERE f.id = :id;
         """)
         result = await self.db.execute(query, {"id": grupo_id})
@@ -117,11 +125,24 @@ class GrupoService:
                 detail="Ya existe un grupo con ese nombre.",
             )
 
-        prog = await self.db.execute(text("SELECT id FROM programa_formacion ORDER BY id LIMIT 1;"))
-        prog_row = prog.mappings().first()
-        if not prog_row:
-            raise HTTPException(status_code=500, detail="No hay programas de formación para crear la ficha.")
-        programa_id = prog_row["id"]
+        # Programa: el que seleccione el usuario. Si no se envía (llamadas
+        # antiguas), se mantiene el comportamiento previo como fallback
+        # temporal, pero se registra en el log.
+        if getattr(grupo_data, "programa_id", None) is not None:
+            prog = await self.db.execute(
+                text("SELECT id FROM programa_formacion WHERE id = :id;"),
+                {"id": grupo_data.programa_id},
+            )
+            if prog.first() is None:
+                raise HTTPException(status_code=400, detail="El programa indicado no existe.")
+            programa_id = grupo_data.programa_id
+        else:
+            prog = await self.db.execute(text("SELECT id FROM programa_formacion ORDER BY id LIMIT 1;"))
+            prog_row = prog.mappings().first()
+            if not prog_row:
+                raise HTTPException(status_code=500, detail="No hay programas de formación para crear la ficha.")
+            programa_id = prog_row["id"]
+            logger.warning("POST /grupos/ sin programa_id: se usó el primer programa (compatibilidad).")
         hoy = date.today()
         fin = hoy + timedelta(days=365)
 
@@ -133,23 +154,31 @@ class GrupoService:
             if c.first() is None:
                 raise HTTPException(status_code=400, detail="El centro indicado no existe.")
 
+        director_id = getattr(grupo_data, "director_id", None)
+        if director_id is not None:
+            d = await self.db.execute(
+                text("SELECT 1 FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');"),
+                {"id": director_id},
+            )
+            if d.first() is None:
+                raise HTTPException(status_code=400, detail="El director indicado no existe o está inactivo.")
+        else:
+            director_id = coordinador_id
+
         query = text("""
             INSERT INTO fichas (programa_id, number, director_id, centro_id, start_date, end_date)
             VALUES (:prog, :nombre, :director, :centro, :ini, :fin)
-            RETURNING id, number AS nombre,
-                      ('Ficha ' || number) AS descripcion,
-                      centro_id AS centro_id,
-                      COALESCE(start_date::timestamptz, NOW()) AS created_at,
-                      director_id AS coordinador_id;
+            RETURNING id;
         """)
         try:
             result = await self.db.execute(
                 query,
-                {"prog": programa_id, "nombre": grupo_data.nombre, "director": coordinador_id, "centro": centro_id, "ini": hoy, "fin": fin},
+                {"prog": programa_id, "nombre": grupo_data.nombre, "director": director_id, "centro": centro_id, "ini": hoy, "fin": fin},
             )
+            new_id = result.mappings().first()["id"]
             await self.db.commit()
             await invalidate_grupo_cache()
-            return dict(result.mappings().first())
+            return await self.get_by_id(new_id)
         except Exception:
             await self.db.rollback()
             logger.exception("Error al crear el grupo.")
@@ -192,6 +221,26 @@ class GrupoService:
             sets.append("centro_id = :centro_id")
             params["centro_id"] = data["centro_id"]
 
+        if data.get("programa_id") is not None:
+            p = await self.db.execute(
+                text("SELECT 1 FROM programa_formacion WHERE id = :id;"),
+                {"id": data["programa_id"]},
+            )
+            if p.first() is None:
+                raise HTTPException(status_code=400, detail="El programa indicado no existe.")
+            sets.append("programa_id = :programa_id")
+            params["programa_id"] = data["programa_id"]
+
+        if data.get("director_id") is not None:
+            d = await self.db.execute(
+                text("SELECT 1 FROM users WHERE id = :id AND user_status IN ('ACTIVE', 'ACTIVO');"),
+                {"id": data["director_id"]},
+            )
+            if d.first() is None:
+                raise HTTPException(status_code=400, detail="El director indicado no existe o está inactivo.")
+            sets.append("director_id = :director_id")
+            params["director_id"] = data["director_id"]
+
         if not sets:
             # solo descripción -> nada que persistir en fichas (sin columna); devolver actual
             return await self.get_by_id(grupo_id)
@@ -200,17 +249,13 @@ class GrupoService:
             result = await self.db.execute(
                 text(f"""
                     UPDATE fichas SET {", ".join(sets)} WHERE id = :id
-                    RETURNING id, number AS nombre,
-                              ('Ficha ' || number) AS descripcion,
-                              centro_id AS centro_id,
-                              COALESCE(start_date::timestamptz, NOW()) AS created_at,
-                              director_id AS coordinador_id;
+                    RETURNING id;
                 """),
                 params,
             )
             await self.db.commit()
             await invalidate_grupo_cache(grupo_id)
-            return dict(result.mappings().first())
+            return await self.get_by_id(grupo_id)
         except Exception:
             await self.db.rollback()
             raise HTTPException(status_code=500, detail="Error al actualizar el grupo.")
@@ -365,9 +410,13 @@ class GrupoService:
             SELECT DISTINCT f.id, f.number AS nombre,
                    ('Ficha ' || f.number) AS descripcion,
                    f.centro_id AS centro_id,
+                   f.programa_id AS programa_id,
+                   p.name AS programa_nombre,
+                   f.director_id AS director_id,
                    COALESCE(f.start_date::timestamptz, NOW()) AS created_at
             FROM fichas f
             LEFT JOIN sesiones s ON s.ficha_id = f.id
+            LEFT JOIN programa_formacion p ON p.id = f.programa_id
             WHERE f.director_id = :uid OR s.instructor_id = :uid
             ORDER BY f.id ASC;
         """)

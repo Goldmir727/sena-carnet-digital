@@ -10,6 +10,7 @@ import MiCarnet from '../pages/MiCarnet';
 import Usuarios from '../pages/Usuarios';
 import Grupos from '../pages/Grupos';
 import Centros from '../pages/Centros';
+import Programas from '../pages/Programas';
 import Carnets from '../pages/Carnets';
 import Asistencia from '../pages/Asistencia';
 import RegistrarAsistencia from '../pages/RegistrarAsistencia';
@@ -58,6 +59,14 @@ export default function AppRouter() {
             element={
               <PermissionRoute permission="centros.read">
                 <Centros />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="programas"
+            element={
+              <PermissionRoute permission="programas.read">
+                <Programas />
               </PermissionRoute>
             }
           />

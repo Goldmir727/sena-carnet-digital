@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
 import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel } from '../api/users';
 import { useRoles } from '../api/roles';
+import ExcelImportPreview from '../components/import/ExcelImportPreview';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
@@ -93,13 +94,33 @@ export default function Usuarios() {
   const importExcel = useImportUsersExcel();
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [rolTab, setRolTab] = useState('Todos');
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 350);
     return () => clearTimeout(t);
   }, [q]);
 
-  const list = q.trim() ? searchQuery.data : usersQuery.data;
+  const roleName = (u) => u.role || u.rol || ROLE_ID_NAME[u.role_id] || '';
+
+  const TAB_ORDER = ['Aprendiz', 'Docente', 'Funcionario', 'Validador', 'Coordinador'];
+  const TAB_LABEL = {
+    Aprendiz: 'Aprendices',
+    Docente: 'Docentes',
+    Funcionario: 'Funcionarios',
+    Validador: 'Validadores',
+    Coordinador: 'Coordinadores',
+  };
+  const roleNames = Array.isArray(rolesQuery.data) && rolesQuery.data.length
+    ? rolesQuery.data.map((r) => r.name)
+    : Object.values(ROLE_ID_NAME);
+  const tabs = ['Todos', ...TAB_ORDER.filter((n) => roleNames.includes(n))];
+
+  const baseList = q.trim() ? searchQuery.data : usersQuery.data;
+  const list = rolTab === 'Todos' ? baseList : (baseList || []).filter((u) => roleName(u) === rolTab);
   const displayRows = list || [];
 
   const activos = Array.isArray(usersQuery.data)
@@ -243,6 +264,20 @@ export default function Usuarios() {
     }
   };
 
+  const onImportUsers = () => {
+    if (!importFile) {
+      toast.error('Selecciona un archivo .xlsx');
+      return;
+    }
+    importExcel.mutate({ file: importFile }, {
+      onSuccess: (r) => {
+        setImportResult(r);
+        toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${r.errores} errores`);
+      },
+      onError: (err) => toast.error(getErr(err)),
+    });
+  };
+
   const roleOptions = Array.isArray(rolesQuery.data) ? rolesQuery.data.map((r) => ({ value: r.id, label: r.name })) : [];
 
   const columns = [
@@ -336,7 +371,7 @@ export default function Usuarios() {
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Usuarios' }]}
         actions={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => { setImportResult(null); setImportOpen(true); }}>
+            <Button variant="secondary" onClick={() => { setImportResult(null); setImportFile(null); setImportPreview(null); setImportOpen(true); }}>
               Importar Excel
             </Button>
             <Button icon={UserPlus} onClick={openCreate}>
@@ -369,6 +404,23 @@ export default function Usuarios() {
           <p className="text-xs text-slate-400">
             {q.trim() ? `Resultados de "${q.trim()}"` : `${displayRows.length} usuarios`}
           </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setRolTab(t)}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                rolTab === t
+                  ? 'border-sena-green bg-sena-green text-white shadow-soft'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-sena-green hover:text-sena-green-dark'
+              }`}
+            >
+              {t === 'Todos' ? 'Todos' : TAB_LABEL[t] || t}
+            </button>
+          ))}
         </div>
 
         {usersQuery.isError ? (
@@ -486,34 +538,42 @@ export default function Usuarios() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         title="Importar usuarios desde Excel"
-        description="Sube el .xlsx original. Columnas: Documento, Correo, Nombres, Apellidos, Tipo, Usuario, Clave, Rol."
-        size="sm"
+        description="Columnas: Documento, Correo, Nombres, Apellidos, Tipo, Usuario, Clave, Rol. Sin rol, se crea como Aprendiz."
+        size="lg"
         footer={
           <>
             <Button variant="secondary" onClick={() => setImportOpen(false)}>
-              Cerrar
+              {importResult ? 'Cerrar' : 'Cancelar'}
             </Button>
+            {!importResult && (
+              <Button
+                icon={UserPlus}
+                onClick={onImportUsers}
+                loading={importExcel.isPending}
+                disabled={!importFile || importLoading || !importPreview?.rows?.length || (importPreview?.faltantes || []).length > 0}
+              >
+                Confirmar e importar
+              </Button>
+            )}
           </>
         }
       >
         <div className="space-y-4">
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              setImportResult(null);
-              importExcel.mutate({ file: f }, {
-                onSuccess: (r) => {
-                  setImportResult(r);
-                  toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${r.errores} errores`);
-                },
-                onError: (err) => toast.error(getErr(err)),
-              });
-              e.target.value = '';
+          <div className="rounded-xl border border-sena-tint-200 bg-sena-tint-50 p-3 text-xs text-slate-600">
+            <p className="mb-1 font-semibold text-sena-green-dark">Columnas esperadas del Excel</p>
+            <p>
+              <span className="font-medium">Obligatorias:</span> nombres, apellidos, numero_documento, email
+              <span className="font-medium"> · Opcionales:</span> tipo_documento, tipo_sangre, rol, ficha
+            </p>
+            <p className="mt-1">También se aceptan alias: Documento, Correo, Nombre, Apellido. La columna Rol admite Aprendiz, Docente, Funcionario o Validador (por nombre o id). La columna Ficha (también numero_ficha) busca la ficha por su número y matricula al aprendiz automáticamente. La contraseña inicial será el número de documento si no indicas Clave. Los duplicados por documento/correo se omiten.</p>
+          </div>
+          <ExcelImportPreview
+            onReady={({ file, preview, previewLoading }) => {
+              setImportFile(file);
+              setImportPreview(preview);
+              setImportLoading(previewLoading);
+              if (!file) setImportResult(null);
             }}
-            className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-sena-tint-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-sena-green-dark hover:file:bg-sena-tint-200"
           />
           {importExcel.isPending && <p className="text-sm text-slate-500">Procesando archivo…</p>}
           {importResult && (

@@ -19,6 +19,12 @@ class GrupoCreate(BaseModel):
     centro_id: Optional[int] = Field(
         None, gt=0, description="ID del centro de formación (fichas.centro_id)."
     )
+    programa_id: Optional[int] = Field(
+        None, gt=0, description="ID del programa de formación (fichas.programa_id)."
+    )
+    director_id: Optional[int] = Field(
+        None, gt=0, description="ID del usuario director de la ficha (fichas.director_id)."
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -36,6 +42,9 @@ class GrupoResponse(BaseModel):
     nombre: str = Field(..., description="Nombre del grupo.")
     descripcion: Optional[str] = Field(None, description="Descripción del grupo.")
     centro_id: Optional[int] = Field(None, description="Centro de formación.")
+    programa_id: Optional[int] = Field(None, description="Programa de formación.")
+    programa_nombre: Optional[str] = Field(None, description="Nombre del programa de formación.")
+    director_id: Optional[int] = Field(None, description="Director de la ficha.")
     created_at: datetime = Field(..., description="Fecha de creación.")
 
     model_config = ConfigDict(from_attributes=True)
@@ -63,6 +72,12 @@ class GrupoUpdate(BaseModel):
     )
     centro_id: Optional[int] = Field(
         None, gt=0, description="ID del centro de formación (fichas.centro_id)."
+    )
+    programa_id: Optional[int] = Field(
+        None, gt=0, description="ID del programa de formación (fichas.programa_id)."
+    )
+    director_id: Optional[int] = Field(
+        None, gt=0, description="ID del director de la ficha (fichas.director_id)."
     )
 
     model_config = ConfigDict(extra="forbid")

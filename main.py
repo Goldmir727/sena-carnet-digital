@@ -19,6 +19,7 @@ from modules.grupos.grupo_router import router as grupo_router
 from modules.qr.qr_router import router as qr_router
 from modules.centros.centro_router import router as centro_router
 from modules.sesiones.sesion_router import router as sesion_router
+from modules.programas.programa_router import router as programa_router
 from core.logger import logger
 
 
@@ -114,6 +115,7 @@ app.include_router(grupo_router)
 app.include_router(qr_router)
 app.include_router(centro_router)
 app.include_router(sesion_router)
+app.include_router(programa_router)
 
 import os
 from core.config import settings
