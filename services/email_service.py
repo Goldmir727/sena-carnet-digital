@@ -102,7 +102,9 @@ async def send_verification_code(email: str, username: str, code: str) -> bool:
         f"SENA - Sistema de Gestion de Carnets Digitales"
     )
 
-    code_digits = "&nbsp;".join(list(code))
+    # El código va contiguo (sin espacios): el espaciado visual lo da
+    # letter-spacing por CSS, así copiar-pegar trae "824832" limpio.
+    code_digits = code
     html_body = _build_html(
         title=f"Hola, {username}",
         content=(

@@ -183,6 +183,14 @@ class UserResponse(UserBase):
     con la información pública del usuario.
     """
 
+    # El email se relaja a str en lectura: la BD puede contener
+    # correos legacy que EmailStr rechazaría y eso tumbaba
+    # GET /users/ y /users/search completos por una sola fila.
+    # La validación estricta se mantiene en UserCreate/UserUpdate.
+    email: str = Field(
+        ...,
+        description="Correo electrónico del usuario.")
+
     id: int = Field(
         ..., 
         description="ID del usuario."

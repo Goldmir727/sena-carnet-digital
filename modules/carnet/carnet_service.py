@@ -219,7 +219,7 @@ class CarnetService:
         logger.info(f"Cambiando estado del carnet {carnet_id} a {nuevo_estado}")
 
         current = await self.db.execute(
-            text(f"SELECT id, {ESTADO_SQL} AS estado, expiration_date FROM carnets WHERE id = :id;"),
+            text(f"SELECT c.id, {ESTADO_SQL} AS estado, c.expiration_date FROM carnets c WHERE c.id = :id;"),
             {"id": carnet_id}
         )
         row = current.mappings().first()
@@ -256,12 +256,12 @@ class CarnetService:
             await invalidate_carnet_cache(r["user_id"] if r else None)
             return await self.get_carnet_by_id(carnet_id)
         if nuevo_estado == "Inactivo":
-            cur = await self.db.execute(text("SELECT user_id FROM carnets WHERE id = :id;"), {"id": carnet_id})
-            r = cur.mappings().first()
+            previo = await self.get_carnet_by_id(carnet_id)
             await self.db.execute(text("DELETE FROM carnets WHERE id = :id;"), {"id": carnet_id})
             await self.db.commit()
-            await invalidate_carnet_cache(r["user_id"] if r else None)
-            return {"id": carnet_id, "estado": "Inactivo", "detail": "Carnet eliminado (base.sql sin columna status)."}
+            await invalidate_carnet_cache(previo["user_id"])
+            previo["estado"] = "Inactivo"
+            return previo
         # Suspendido no tiene equivalente en base.sql
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

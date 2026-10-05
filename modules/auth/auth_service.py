@@ -125,6 +125,9 @@ class AuthService:
         }
 
     async def verify_2fa(self, preauth_token: str, code_in: str) -> dict:
+        import re
+        # Acepta "824832", "8 2 4 8 3 2" o "8-248-32": se comparan solo dígitos.
+        code_in = re.sub(r"\D", "", code_in or "")
         payload = decode_preauth_token(preauth_token)
         user_id = payload.get("user_id")
 
