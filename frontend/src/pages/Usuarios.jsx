@@ -82,6 +82,8 @@ function initials(nombres, apellidos, email) {
 }
 
 export default function Usuarios() {
+  const [estadoTab, setEstadoTab] = useState('activos');
+  const [reactivarRow, setReactivarRow] = useState(null);
   const usersQuery = useUsers(estadoTab);
   const allQueryForCards = useUsers('todos');
   const rolesQuery = useRoles();
@@ -100,8 +102,6 @@ export default function Usuarios() {
   const [importPreview, setImportPreview] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [rolTab, setRolTab] = useState('Todos');
-  const [estadoTab, setEstadoTab] = useState('activos');
-  const [reactivarRow, setReactivarRow] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 350);
