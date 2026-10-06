@@ -190,8 +190,8 @@ export default function Grupos() {
 
   const onDownloadTemplate = async () => {
     try {
-      await downloadImportTemplate();
-      toast.success('Plantilla descargada');
+      await downloadImportTemplate(detail?.nombre || undefined);
+      toast.success(detail?.nombre ? `Plantilla de la ficha ${detail.nombre} descargada` : 'Plantilla descargada');
     } catch (e) {
       toast.error(getErr(e));
     }

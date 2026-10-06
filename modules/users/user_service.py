@@ -1026,29 +1026,44 @@ class UserService:
         }
 
 
-def generar_plantilla_excel() -> BytesIO:
+def generar_plantilla_excel(ficha: str | None = None) -> BytesIO:
     """
-    Genera la plantilla .xlsx para la importación masiva de estudiantes.
+    Genera la plantilla oficial .xlsx para la importación masiva de aprendices.
 
-    Solo contiene el encabezado con las columnas esperadas, validaciones
-    desplegables y anchos ajustados. Sin filas de ejemplo para evitar
-    importaciones accidentales.
+    Columnas oficiales: documento, correo, nombres, apellidos, ficha,
+    tipo_documento, tipo_sangre, rol.
+    - Sin parámetro ficha: la columna `ficha` queda vacía para que el
+      usuario la diligencie (importación libre desde Usuarios).
+    - Con ficha: la columna `ficha` viene prellenada en la fila ejemplo
+      (importación desde una ficha concreta). El backend valida que no
+      se modifique accidentalmente.
     """
     wb = Workbook()
     ws = wb.active
-    ws.title = "Estudiantes"
+    ws.title = "Aprendices"
     headers = [
+        "documento",
+        "correo",
         "nombres",
         "apellidos",
+        "ficha",
         "tipo_documento",
-        "numero_documento",
-        "email",
         "tipo_sangre",
+        "rol",
     ]
     ws.append(headers)
-    widths = [25, 25, 16, 20, 32, 14]
+    widths = [20, 32, 25, 25, 16, 16, 14, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    # La columna ficha siempre como texto (evita notación científica).
+    ficha_col = 5  # E
+    for row in range(2, 1002):
+        ws.cell(row=row, column=ficha_col).number_format = "@"
+
+    if ficha:
+        example = ws.cell(row=2, column=ficha_col, value=ficha)
+        example.number_format = "@"
 
     dv_doc = DataValidation(
         type="list",
@@ -1059,7 +1074,7 @@ def generar_plantilla_excel() -> BytesIO:
         error="Use: CC, CE, TI, PEP",
     )
     ws.add_data_validation(dv_doc)
-    dv_doc.add("C2:C1001")
+    dv_doc.add("F2:F1001")
 
     dv_sangre = DataValidation(
         type="list",
@@ -1070,7 +1085,18 @@ def generar_plantilla_excel() -> BytesIO:
         error=f"Use: {', '.join(TIPOS_SANGRE)}",
     )
     ws.add_data_validation(dv_sangre)
-    dv_sangre.add("F2:F1001")
+    dv_sangre.add("G2:G1001")
+
+    dv_rol = DataValidation(
+        type="list",
+        formula1='"Aprendiz,Docente,Funcionario,Validador"',
+        allow_blank=True,
+        showErrorMessage=True,
+        errorTitle="Rol inválido",
+        error="Use: Aprendiz, Docente, Funcionario, Validador",
+    )
+    ws.add_data_validation(dv_rol)
+    dv_rol.add("H2:H1001")
 
     buffer = BytesIO()
     wb.save(buffer)

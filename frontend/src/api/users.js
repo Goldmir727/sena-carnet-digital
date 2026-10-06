@@ -83,12 +83,13 @@ export function useImportUsersExcel() {
   });
 }
 
-export async function downloadImportTemplate() {
-  const res = await api.get('/users/import-template', { responseType: 'blob' });
+export async function downloadImportTemplate(ficha) {
+  const params = ficha ? { ficha } : {};
+  const res = await api.get('/users/import-template', { params, responseType: 'blob' });
   const url = URL.createObjectURL(res.data);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'plantilla_estudiantes.xlsx';
+  a.download = ficha ? `Plantilla aprendices - Ficha ${ficha}.xlsx` : 'plantilla_aprendices.xlsx';
   document.body.appendChild(a);
   a.click();
   a.remove();

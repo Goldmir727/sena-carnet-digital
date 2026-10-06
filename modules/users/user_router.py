@@ -93,19 +93,32 @@ async def search_users(
 # ============================
 @router.get("/import-template", status_code=status.HTTP_200_OK)
 async def download_import_template(
+    ficha: Annotated[str | None, Query(description="Número de ficha para prellenar la plantilla.")] = None,
+    db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_coordinador_user),
 ):
     """
-    Descarga la plantilla .xlsx para la importación masiva de estudiantes.
+    Descarga la plantilla .xlsx para la importación masiva de aprendices.
 
-    Solo contiene el encabezado con las columnas esperadas:
-    nombres, apellidos, tipo_documento, numero_documento, email, tipo_sangre.
+    Sin `ficha`: columnas oficiales con la columna `ficha` para diligenciar
+    (importación libre desde Usuarios).
+    Con `ficha=<numero>`: valida que la ficha exista y genera
+    plantilla_aprendices_ficha_<numero>.xlsx con la columna ficha prellenada.
     """
-    buffer = generar_plantilla_excel()
+    if ficha is not None:
+        from sqlalchemy import text as _text
+        existe = await db.execute(_text("SELECT 1 FROM fichas WHERE number = :n;"), {"n": str(ficha)})
+        if not existe.first():
+            raise HTTPException(status_code=404, detail=f"La ficha {ficha} no existe.")
+        buffer = generar_plantilla_excel(str(ficha))
+        filename = f"plantilla_aprendices_ficha_{ficha}.xlsx"
+    else:
+        buffer = generar_plantilla_excel()
+        filename = "plantilla_aprendices.xlsx"
     return Response(
         content=buffer.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=plantilla_estudiantes.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 

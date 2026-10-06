@@ -10,10 +10,11 @@ import {
   IdCard,
   User as UserIcon,
   Search,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
-import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel } from '../api/users';
+import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel, downloadImportTemplate } from '../api/users';
 import { useRoles } from '../api/roles';
 import ExcelImportPreview from '../components/import/ExcelImportPreview';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
@@ -566,6 +567,11 @@ export default function Usuarios() {
               <span className="font-medium"> · Opcionales:</span> tipo_documento, tipo_sangre, rol, ficha
             </p>
             <p className="mt-1">También se aceptan alias: Documento, Correo, Nombre, Apellido. La columna Rol admite Aprendiz, Docente, Funcionario o Validador (por nombre o id). La columna Ficha (también numero_ficha) busca la ficha por su número y matricula al aprendiz automáticamente. La contraseña inicial será el número de documento si no indicas Clave. Los duplicados por documento/correo se omiten.</p>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" icon={Download} onClick={async () => { try { await downloadImportTemplate(); toast.success('Plantilla descargada'); } catch (e) { toast.error(getErr(e)); } }}>
+              Plantilla
+            </Button>
           </div>
           <ExcelImportPreview
             onReady={({ file, preview, previewLoading }) => {
