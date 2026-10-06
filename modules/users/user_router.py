@@ -155,7 +155,7 @@ async def import_users_excel(
         if not existe.first():
             raise HTTPException(status_code=404, detail="Grupo no encontrado.")
     service = UserService(db)
-    resultado = await service.import_users_excel(contents)
+    resultado = await service.import_users_excel(contents, forzar_rol_aprendiz=grupo_id is not None)
     if grupo_id is not None:
         extra = await service.asignar_importados_a_grupo(grupo_id, resultado.get("detalle", []))
         resultado.update(extra)

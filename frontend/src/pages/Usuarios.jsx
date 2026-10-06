@@ -564,9 +564,9 @@ export default function Usuarios() {
             <p className="mb-1 font-semibold text-sena-green-dark">Columnas esperadas del Excel</p>
             <p>
               <span className="font-medium">Obligatorias:</span> nombres, apellidos, numero_documento, email
-              <span className="font-medium"> · Opcionales:</span> tipo_documento, tipo_sangre, rol, ficha
+              <span className="font-medium"> · Opcionales:</span> tipo_documento, tipo_sangre, ficha
             </p>
-            <p className="mt-1">También se aceptan alias: Documento, Correo, Nombre, Apellido. La columna Rol admite Aprendiz, Docente, Funcionario o Validador (por nombre o id). La columna Ficha (también numero_ficha) busca la ficha por su número y matricula al aprendiz automáticamente. La contraseña inicial será el número de documento si no indicas Clave. Los duplicados por documento/correo se omiten.</p>
+            <p className="mt-1">También se aceptan alias: Documento, Correo, Nombre, Apellido. La columna Rol se ignora en el flujo de aprendices: siempre se crean con rol Aprendiz. La columna Ficha (también numero_ficha) busca la ficha por su número y matricula al aprendiz automáticamente. La contraseña inicial será el número de documento si no indicas Clave. Los duplicados por documento/correo se omiten.</p>
           </div>
           <div className="flex justify-end">
             <Button size="sm" variant="outline" icon={Download} onClick={async () => { try { await downloadImportTemplate(); toast.success('Plantilla descargada'); } catch (e) { toast.error(getErr(e)); } }}>

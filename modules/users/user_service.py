@@ -601,7 +601,7 @@ class UserService:
     # Con grupo_id (endpoint), además matricula Aprendices en el grupo.
     # ============================
 
-    async def import_users_excel(self, contenido: bytes) -> dict:
+    async def import_users_excel(self, contenido: bytes, forzar_rol_aprendiz: bool = False) -> dict:
         """
         Importa usuarios desde un .xlsx fila por fila.
 
@@ -712,7 +712,11 @@ class UserService:
                     continue
 
                 rol_raw = val("rol")
-                if not rol_raw:
+                # En el flujo de aprendices (por ficha o grupo) el rol siempre es Aprendiz,
+                # sin importar lo que diga una columna `rol` manipulada en el Excel.
+                if forzar_rol_aprendiz or "ficha" in col:
+                    role_id = rol_por_nombre.get("aprendiz")
+                elif not rol_raw:
                     role_id = rol_por_nombre.get("aprendiz")
                 elif rol_raw.isdigit():
                     role_id = int(rol_raw)
@@ -1049,10 +1053,9 @@ def generar_plantilla_excel(ficha: str | None = None) -> BytesIO:
         "ficha",
         "tipo_documento",
         "tipo_sangre",
-        "rol",
     ]
     ws.append(headers)
-    widths = [20, 32, 25, 25, 16, 16, 14, 12]
+    widths = [20, 32, 25, 25, 16, 16, 14]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -1086,17 +1089,6 @@ def generar_plantilla_excel(ficha: str | None = None) -> BytesIO:
     )
     ws.add_data_validation(dv_sangre)
     dv_sangre.add("G2:G1001")
-
-    dv_rol = DataValidation(
-        type="list",
-        formula1='"Aprendiz,Docente,Funcionario,Validador"',
-        allow_blank=True,
-        showErrorMessage=True,
-        errorTitle="Rol inválido",
-        error="Use: Aprendiz, Docente, Funcionario, Validador",
-    )
-    ws.add_data_validation(dv_rol)
-    dv_rol.add("H2:H1001")
 
     buffer = BytesIO()
     wb.save(buffer)
