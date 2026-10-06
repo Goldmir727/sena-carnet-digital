@@ -68,3 +68,34 @@ class CentroService:
             await self.db.rollback()
             logger.exception("Error al crear centro.")
             raise HTTPException(status_code=500, detail="Error al crear el centro.")
+
+    async def update(self, centro_id: int, data: dict) -> dict:
+        current = await self.db.execute(text("SELECT id FROM centros_formacion WHERE id = :id;"), {"id": centro_id})
+        if current.first() is None:
+            raise HTTPException(status_code=404, detail="Centro no encontrado.")
+        if data.get("codigo") is not None:
+            dup = await self.db.execute(
+                text("SELECT 1 FROM centros_formacion WHERE codigo = :c AND id != :id;"),
+                {"c": data["codigo"], "id": centro_id},
+            )
+            if dup.first() is not None:
+                raise HTTPException(status_code=409, detail="Ya existe un centro con ese código.")
+        sets = []
+        params = {"id": centro_id}
+        for field in ("codigo", "nombre", "regional", "ciudad", "direccion", "telefono", "email", "status"):
+            if data.get(field) is not None:
+                sets.append(f"{field} = :{field}")
+                params[field] = data[field]
+        if not sets:
+            raise HTTPException(status_code=400, detail="No se enviaron datos para actualizar.")
+        result = await self.db.execute(
+            text(f"""
+                UPDATE centros_formacion SET {", ".join(sets)} WHERE id = :id
+                RETURNING id, codigo, nombre, regional, ciudad,
+                          direccion, telefono, email, status;
+            """),
+            params,
+        )
+        await self.db.commit()
+        await invalidate_centro_cache()
+        return dict(result.mappings().first())

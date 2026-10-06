@@ -19,3 +19,17 @@ class CentroResponse(CentroCreate):
     status: str = "activo"
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CentroUpdate(BaseModel):
+    codigo: Optional[str] = Field(None, min_length=1, max_length=20)
+    nombre: Optional[str] = Field(None, min_length=3, max_length=150)
+    regional: Optional[str] = Field(None, min_length=1, max_length=100)
+    ciudad: Optional[str] = Field(None, min_length=1, max_length=100)
+    direccion: Optional[str] = Field(None, max_length=200)
+    telefono: Optional[str] = Field(None, max_length=30)
+    email: Optional[str] = Field(None, max_length=150)
+    status: Optional[str] = Field(None, pattern="^(activo|inactivo)$")
+
+    model_config = ConfigDict(extra="forbid")
+

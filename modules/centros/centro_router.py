@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from core.security import get_coordinador_user
-from modules.centros.centro_schema import CentroCreate, CentroResponse
+from modules.centros.centro_schema import CentroCreate, CentroResponse, CentroUpdate
 from modules.centros.centro_service import CentroService
 
 router = APIRouter(prefix="/centros", tags=["Centros"])
@@ -24,3 +24,13 @@ async def create_centro(
     current_user: dict = Depends(get_coordinador_user),
 ):
     return await CentroService(db).create(data)
+
+
+@router.put("/{centro_id}", response_model=CentroResponse)
+async def update_centro(
+    centro_id: int,
+    data: CentroUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_coordinador_user),
+):
+    return await CentroService(db).update(centro_id, data.model_dump(exclude_unset=True))

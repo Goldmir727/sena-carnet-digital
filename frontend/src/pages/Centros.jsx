@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Plus, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useCentros, useCreateCentro } from '../api/centros';
+import { useCentros, useCreateCentro, useUpdateCentro } from '../api/centros';
 import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
@@ -9,6 +9,9 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
 import ErrorState from '../components/ui/ErrorState';
+import Dropdown from '../components/ui/Dropdown';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import Badge from '../components/ui/Badge';
 
 const EMPTY_FORM = {
   nombre: '',
@@ -23,12 +26,37 @@ const EMPTY_FORM = {
 export default function Centros() {
   const centrosQuery = useCentros();
   const createCentro = useCreateCentro();
+  const updateCentro = useUpdateCentro();
 
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
+  const [statusRow, setStatusRow] = useState(null);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target ? e.target.value : e }));
+
+  const openEdit = (row) => {
+    setEditing(row);
+    setForm({
+      nombre: row.nombre || '',
+      codigo: row.codigo || '',
+      regional: row.regional || '',
+      ciudad: row.ciudad || '',
+      direccion: row.direccion || '',
+      telefono: row.telefono || '',
+      email: row.email || '',
+    });
+    setFormErrors({});
+    setOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setFormErrors({});
+    setOpen(true);
+  };
 
   const save = async () => {
     const errs = {};
@@ -53,11 +81,17 @@ export default function Centros() {
       ...(form.email.trim() && { email: form.email.trim() }),
     };
     try {
-      await createCentro.mutateAsync(payload);
-      toast.success('Centro creado correctamente');
+      if (editing) {
+        await updateCentro.mutateAsync({ id: editing.id, ...payload });
+        toast.success('Centro actualizado correctamente');
+      } else {
+        await createCentro.mutateAsync(payload);
+        toast.success('Centro creado correctamente');
+      }
       setOpen(false);
       setForm(EMPTY_FORM);
       setFormErrors({});
+      setEditing(null);
     } catch (e) {
       toast.error(getErr(e));
     }
@@ -95,6 +129,29 @@ export default function Centros() {
         </span>
       ),
     },
+    {
+      key: 'status',
+      label: 'Estado',
+      render: (r) => (
+        r.status === 'activo' ? <Badge variant="green">Activo</Badge> : <Badge variant="slate">Inactivo</Badge>
+      ),
+    },
+    {
+      key: 'acciones',
+      label: '',
+      align: 'right',
+      render: (r) => (
+        <Dropdown
+          items={[
+            { label: 'Editar', icon: Pencil, onClick: () => openEdit(r) },
+            { divider: true },
+            r.status === 'activo'
+              ? { label: 'Desactivar', icon: null, danger: true, onClick: () => setStatusRow({ centro: r, target: 'inactivo' }) }
+              : { label: 'Activar', icon: null, onClick: () => setStatusRow({ centro: r, target: 'activo' }) },
+          ]}
+        />
+      ),
+    },
   ];
 
   const isBackendMissing = centrosQuery.error?.response?.status === 404;
@@ -108,7 +165,7 @@ export default function Centros() {
         icon={Building2}
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Centros' }]}
         actions={
-          <Button icon={Plus} onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setOpen(true); }}>
+          <Button icon={Plus} onClick={openCreate}>
             Nuevo centro
           </Button>
         }
@@ -138,7 +195,7 @@ export default function Centros() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Nuevo centro de formación"
+        title={editing ? 'Editar centro de formación' : 'Nuevo centro de formación'}
         description="Los grupos (fichas) se vincularán a este centro."
         size="lg"
         footer={
@@ -146,8 +203,8 @@ export default function Centros() {
             <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button icon={Plus} onClick={save} loading={createCentro.isPending}>
-              Crear centro
+            <Button icon={editing ? Pencil : Plus} onClick={save} loading={createCentro.isPending || updateCentro.isPending}>
+              {editing ? 'Guardar cambios' : 'Crear centro'}
             </Button>
           </>
         }
@@ -162,6 +219,27 @@ export default function Centros() {
           <Input label="Correo" type="email" value={form.email} onChange={set('email')} error={formErrors.email} placeholder="Opcional" />
         </div>
       </Modal>
+      <ConfirmDialog
+        open={!!statusRow}
+        onClose={() => setStatusRow(null)}
+        onConfirm={async () => {
+          try {
+            await updateCentro.mutateAsync({ id: statusRow.centro.id, status: statusRow.target });
+            toast.success(statusRow.target === 'activo' ? 'Centro activado' : 'Centro desactivado');
+            setStatusRow(null);
+          } catch (e) {
+            toast.error(getErr(e));
+          }
+        }}
+        loading={updateCentro.isPending}
+        title={statusRow?.target === 'activo' ? 'Activar centro' : 'Desactivar centro'}
+        description={
+          statusRow?.target === 'activo'
+            ? `¿Deseas activar el centro ${statusRow?.centro?.nombre}?`
+            : `¿Deseas desactivar el centro ${statusRow?.centro?.nombre}? Los grupos asociados dejarán de poder usarlo, pero sus datos e historial se conservan.`
+        }
+        confirmLabel={statusRow?.target === 'activo' ? 'Activar' : 'Desactivar'}
+      />
     </div>
   );
 }

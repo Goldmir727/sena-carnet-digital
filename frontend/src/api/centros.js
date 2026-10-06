@@ -12,6 +12,14 @@ export function useCentros() {
   });
 }
 
+export function useUpdateCentro() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }) => api.put(`/centros/${id}`, payload).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['centros'] }),
+  });
+}
+
 export function useCreateCentro() {
   const qc = useQueryClient();
   return useMutation({

@@ -751,16 +751,69 @@ export default function Usuarios() {
           />
           {importExcel.isPending && <p className="text-sm text-slate-500">Procesando archivo…</p>}
           {importResult && (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-              <p>Procesados: <strong>{importResult.procesados}</strong></p>
-              <p>Insertados: <strong>{importResult.insertados}</strong></p>
-              <p>Duplicados: <strong>{importResult.duplicados}</strong></p>
-              <p>Errores: <strong>{Array.isArray(importResult.errores) ? importResult.errores.length : importResult.errores}</strong></p>
-              {(importResult.detalle || []).filter((d) => d.estado !== 'insertado').slice(0, 10).map((d, i) => (
-                <p key={i} className="truncate text-xs text-slate-400">
-                  Fila {d.fila}: {d.estado}{d.mensaje ? ` — ${d.mensaje}` : ''} ({d.documento || '—'})
-                </p>
-              ))}
+            <div className="space-y-3">
+              {(() => {
+                const erroresArr = Array.isArray(importResult.errores) ? importResult.errores : [];
+                const erroresCount = Array.isArray(importResult.errores) ? importResult.errores.length : importResult.errores;
+                const detalleErrores = (importResult.detalle || []).filter((d) => d.estado === 'error');
+                const totalErrores = erroresCount + (erroresArr.length ? 0 : detalleErrores.length);
+                const exitosa = totalErrores === 0;
+                const parcial = !exitosa && (importResult.insertados > 0 || (importResult.creados || 0) > 0 || (importResult.asignados || 0) > 0);
+                return (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <p className={`mb-2 font-semibold ${exitosa ? 'text-sena-green-dark' : 'text-amber-700'}`}>
+                      {exitosa ? 'Importación completada correctamente.' : parcial ? `Importación completada con ${totalErrores} error(es).` : 'Importación fallida.'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className="text-lg font-bold text-sena-ink">{importResult.procesados ?? 0}</p>
+                        <p className="text-xs text-slate-400">Filas procesadas</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className="text-lg font-bold text-sena-green-dark">{importResult.creados ?? importResult.insertados ?? 0}</p>
+                        <p className="text-xs text-slate-400">Usuarios creados</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className="text-lg font-bold text-sena-ink">{importResult.existentes ?? importResult.duplicados ?? 0}</p>
+                        <p className="text-xs text-slate-400">Ya existían</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className="text-lg font-bold text-sena-green-dark">{importResult.asignados ?? 0}</p>
+                        <p className="text-xs text-slate-400">Matrículas creadas</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className="text-lg font-bold text-sena-ink">{importResult.ya_en_grupo ?? importResult.ya_en_ficha ?? 0}</p>
+                        <p className="text-xs text-slate-400">Ya matriculados</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 text-center">
+                        <p className={`text-lg font-bold ${totalErrores ? 'text-red-600' : 'text-slate-400'}`}>{totalErrores}</p>
+                        <p className="text-xs text-slate-400">Errores</p>
+                      </div>
+                    </div>
+                    {(erroresArr.length > 0 || detalleErrores.length > 0) && (
+                      <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-2">
+                        <p className="mb-1 text-xs font-semibold text-red-700">Detalle de errores</p>
+                        <div className="max-h-40 space-y-1 overflow-y-auto scrollbar-thin">
+                          {erroresArr.map((e, i) => (
+                            <p key={`e${i}`} className="text-xs text-slate-600">
+                              <span className="font-semibold text-red-600">Fila {e.fila}</span>
+                              {e.documento ? ` · ${e.documento}` : ''}
+                              {` — ${e.error || e.mensaje || 'Error'}`}
+                            </p>
+                          ))}
+                          {detalleErrores.map((d, i) => (
+                            <p key={`d${i}`} className="text-xs text-slate-600">
+                              <span className="font-semibold text-red-600">Fila {d.fila}</span>
+                              {d.documento ? ` · ${d.documento}` : ''}
+                              {` — ${d.mensaje || d.estado}`}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
