@@ -82,11 +82,12 @@ function initials(nombres, apellidos, email) {
 }
 
 export default function Usuarios() {
-  const usersQuery = useUsers();
+  const usersQuery = useUsers(estadoTab);
+  const allQueryForCards = useUsers('todos');
   const rolesQuery = useRoles();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
-  const searchQuery = useUsersSearch(debounced);
+  const searchQuery = useUsersSearch(debounced, estadoTab);
 
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
@@ -99,6 +100,8 @@ export default function Usuarios() {
   const [importPreview, setImportPreview] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [rolTab, setRolTab] = useState('Todos');
+  const [estadoTab, setEstadoTab] = useState('activos');
+  const [reactivarRow, setReactivarRow] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 350);
@@ -124,11 +127,14 @@ export default function Usuarios() {
   const list = rolTab === 'Todos' ? baseList : (baseList || []).filter((u) => roleName(u) === rolTab);
   const displayRows = list || [];
 
-  const activos = Array.isArray(usersQuery.data)
-    ? usersQuery.data.filter((u) => u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status)).length
+  const activos = Array.isArray(allQueryForCards.data)
+    ? allQueryForCards.data.filter((u) => u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status)).length
     : 0;
-  const docentes = Array.isArray(usersQuery.data)
-    ? usersQuery.data.filter((u) => (u.role || ROLE_ID_NAME[u.role_id]) === 'Docente').length
+  const suspendidos = Array.isArray(allQueryForCards.data)
+    ? allQueryForCards.data.filter((u) => !(u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status))).length
+    : 0;
+  const docentes = Array.isArray(allQueryForCards.data)
+    ? allQueryForCards.data.filter((u) => (u.role || ROLE_ID_NAME[u.role_id]) === 'Docente').length
     : 0;
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -236,6 +242,16 @@ export default function Usuarios() {
       await updateUser.mutateAsync({ id: editing.id, ...payload });
       toast.success('Usuario actualizado');
       setEditing(null);
+    } catch (e) {
+      toast.error(getErr(e));
+    }
+  };
+
+  const onReactivar = async () => {
+    try {
+      await updateUser.mutateAsync({ id: reactivarRow.id, is_active: true });
+      toast.success('Usuario reactivado');
+      setReactivarRow(null);
     } catch (e) {
       toast.error(getErr(e));
     }
@@ -355,7 +371,9 @@ export default function Usuarios() {
             { label: 'Editar', icon: Pencil, onClick: () => openEdit(r) },
             { label: 'Cambiar foto', icon: Camera, onClick: () => setPhotoTarget(r) },
             { divider: true },
-            { label: 'Desactivar', icon: UserX, danger: true, onClick: () => setConfirmRow(r) },
+            (r.is_active === 1 || r.is_active === true || ['ACTIVE', 'ACTIVO'].includes(r?.user_status))
+              ? { label: 'Suspender', icon: UserX, danger: true, onClick: () => setConfirmRow(r) }
+              : { label: 'Reactivar', icon: UserPlus, onClick: () => setReactivarRow(r) },
           ]}
         />
       ),
@@ -382,10 +400,11 @@ export default function Usuarios() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Users} label="Usuarios registrados" value={Array.isArray(usersQuery.data) ? usersQuery.data.length : '—'} accent="green" />
-        <StatCard icon={UserIcon} label="Cuentas activas" value={Array.isArray(usersQuery.data) ? activos : '—'} accent="blue" hint="Calculado sobre los datos del servidor" />
-        <StatCard icon={IdCard} label="Docentes" value={Array.isArray(usersQuery.data) ? docentes : '—'} accent="yellow" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={Users} label="Usuarios registrados" value={Array.isArray(allQueryForCards.data) ? allQueryForCards.data.length : '—'} accent="green" />
+        <StatCard icon={UserIcon} label="Cuentas activas" value={Array.isArray(allQueryForCards.data) ? activos : '—'} accent="blue" hint="Calculado sobre todos los usuarios" />
+        <StatCard icon={UserX} label="Suspendidos" value={Array.isArray(allQueryForCards.data) ? suspendidos : '—'} accent="red" />
+        <StatCard icon={IdCard} label="Docentes" value={Array.isArray(allQueryForCards.data) ? docentes : '—'} accent="yellow" />
       </div>
 
       <div className="flex flex-col gap-4">
@@ -408,6 +427,21 @@ export default function Usuarios() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {['todos', 'activos', 'suspendidos'].map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => setEstadoTab(e)}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                estadoTab === e
+                  ? 'border-sena-green bg-sena-green text-white shadow-soft'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-sena-green hover:text-sena-green-dark'
+              }`}
+            >
+              {e === 'todos' ? 'Todos' : e === 'activos' ? 'Activos' : 'Suspendidos'}
+            </button>
+          ))}
+          <span className="mx-1 hidden w-px self-stretch bg-slate-200 sm:inline-block" />
           {tabs.map((t) => (
             <button
               key={t}
@@ -530,9 +564,18 @@ export default function Usuarios() {
         onClose={() => setConfirmRow(null)}
         onConfirm={onDeactivate}
         loading={deactivateUser.isPending}
-        title="Desactivar usuario"
-        description={`¿Seguro que quieres desactivar a ${confirmRow?.nombres || confirmRow?.name || confirmRow?.username}? Perderá el acceso al sistema y a su carnet digital.`}
-        confirmLabel="Desactivar"
+        title="Suspender usuario"
+        description={`¿Deseas suspender a ${confirmRow?.nombres || confirmRow?.name || confirmRow?.username}? Perderá el acceso al sistema y a su carnet digital.`}
+        confirmLabel="Suspender"
+      />
+      <ConfirmDialog
+        open={!!reactivarRow}
+        onClose={() => setReactivarRow(null)}
+        onConfirm={onReactivar}
+        loading={updateUser.isPending}
+        title="Reactivar usuario"
+        description={`¿Deseas reactivar a ${reactivarRow?.nombres || reactivarRow?.name || reactivarRow?.username}? Recuperará el acceso al sistema y a su carnet digital.`}
+        confirmLabel="Reactivar"
       />
 
       <Modal

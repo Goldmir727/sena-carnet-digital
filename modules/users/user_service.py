@@ -177,16 +177,21 @@ class UserService:
     # Obtención de información de usuarios.
     # ============================
 
-    async def get_all_users(self) -> list[dict]:
+    async def get_all_users(self, estado: str = "activos") -> list[dict]:
         """
-        Obtiene todos los usuarios registrados.
-
-        Returns:
-            list[dict]: Lista de usuarios.
+        Obtiene los usuarios según el estado:
+        - activos (defecto): user_status ACTIVE/ACTIVO
+        - suspendidos: user_status INACTIVE
+        - todos: activos y suspendidos
         """
-
-        logger.info("Consultando todos los usuarios.")
+        logger.info(f"Consultando usuarios con estado: {estado}")
         centro = _centro_cols("users")
+        if estado == "suspendidos":
+            where = "WHERE user_status = 'INACTIVE'"
+        elif estado == "todos":
+            where = "WHERE 1=1"
+        else:
+            where = "WHERE user_status IN ('ACTIVE', 'ACTIVO')"
         query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
@@ -194,7 +199,7 @@ class UserService:
                      photo_profile AS foto_perfil,
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
                      {centro}
-            FROM users WHERE user_status IN ('ACTIVE', 'ACTIVO') ORDER BY id ASC;
+            FROM users {where} ORDER BY id ASC;
         """)
         result = await self.db.execute(query)
         return [dict(row) for row in result.mappings().all()]
@@ -231,7 +236,7 @@ class UserService:
             )
         return dict(row)
 
-    async def search_users(self, term: str) -> list[dict]:
+    async def search_users(self, term: str, estado: str = "activos") -> list[dict]:
         """
         Busca usuarios por coincidencia parcial.
 
@@ -250,6 +255,12 @@ class UserService:
         """
         logger.info(f"Buscando usuarios con: {term}")
         centro = _centro_cols("users")
+        if estado == "suspendidos":
+            status_filter = "user_status = 'INACTIVE'"
+        elif estado == "todos":
+            status_filter = "1=1"
+        else:
+            status_filter = "user_status IN ('ACTIVE', 'ACTIVO')"
         query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
@@ -257,7 +268,7 @@ class UserService:
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
                      {centro}
             FROM users
-                WHERE user_status IN ('ACTIVE', 'ACTIVO') AND (email ILIKE :term OR document ILIKE :term
+                WHERE {status_filter} AND (email ILIKE :term OR document ILIKE :term
                     OR name ILIKE :term OR last_name ILIKE :term
                     OR document_type ILIKE :term)
             ORDER BY id ASC;

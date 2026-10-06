@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './client';
 
-export function useUsers() {
+export function useUsers(estado = 'activos') {
   return useQuery({
-    queryKey: ['users'],
-    queryFn: async () => (await api.get('/users/')).data,
+    queryKey: ['users', { estado }],
+    queryFn: async () => (await api.get('/users/', { params: { estado } })).data,
   });
 }
 
@@ -16,10 +16,10 @@ export function useUser(id) {
   });
 }
 
-export function useUsersSearch(q) {
+export function useUsersSearch(q, estado = 'activos') {
   return useQuery({
-    queryKey: ['users', 'search', q],
-    queryFn: async () => (await api.get('/users/search', { params: { q } })).data,
+    queryKey: ['users', 'search', q, estado],
+    queryFn: async () => (await api.get('/users/search', { params: { q, estado } })).data,
     enabled: !!q,
   });
 }

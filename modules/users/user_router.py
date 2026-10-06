@@ -52,18 +52,19 @@ router = APIRouter(
 # ============================
 @router.get("/", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
 async def read_users(
-    db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_admin_user)
+    estado: Annotated[str, Query(description="activos | suspendidos | todos")] = "activos",
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_admin_user),
 ):
     """
-    Obtiene la lista de todos los usuarios.
+    Obtiene la lista de usuarios filtrada por estado.
 
-    Requiere permisos de administrador.
-
-    Returns:
-        list[UserResponse]: Lista de usuarios registrados.
+    El estado por defecto ("activos") conserva el comportamiento anterior.
     """
+    if estado not in ("activos", "suspendidos", "todos"):
+        raise HTTPException(status_code=400, detail="Estado inválido. Use: activos, suspendidos o todos.")
     service = UserService(db)
-    return await service.get_all_users()
+    return await service.get_all_users(estado)
 
 
 @router.get(
@@ -71,20 +72,17 @@ async def read_users(
 )
 async def search_users(
     q: Annotated[str, Query(description="Texto utilizado para buscar usuarios.")],
+    estado: Annotated[str, Query(description="activos | suspendidos | todos")] = "activos",
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_admin_user),
 ):
     """
-    Busca usuarios por nombre, correo o documento.
-
-    Args:
-        q (str): Texto de búsqueda.
-
-    Returns:
-        list[UserResponse]: Usuarios encontrados.
+    Busca usuarios por nombre, correo o documento respetando el estado.
     """
+    if estado not in ("activos", "suspendidos", "todos"):
+        raise HTTPException(status_code=400, detail="Estado inválido. Use: activos, suspendidos o todos.")
     service = UserService(db)
-    return await service.search_users(q)
+    return await service.search_users(q, estado)
 
 
 # ============================
