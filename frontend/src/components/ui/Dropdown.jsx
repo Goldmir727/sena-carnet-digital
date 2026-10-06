@@ -9,7 +9,9 @@ export default function Dropdown({
   triggerClassName = '',
 }) {
   const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const ref = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -25,14 +27,28 @@ export default function Dropdown({
     };
   }, [open]);
 
+  const handleToggle = () => {
+    setOpen((v) => {
+      const next = !v;
+      if (next && ref.current) {
+        const rect = ref.current.getBoundingClientRect();
+        const espacioAbajo = window.innerHeight - rect.bottom;
+        const espacioArriba = rect.top;
+        // Abrir hacia arriba solo cuando falte espacio abajo y arriba haya más.
+        setOpenUp(espacioAbajo < 220 && espacioArriba > espacioAbajo);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="relative" ref={ref}>
       {trigger ? (
-        <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
+        <div onClick={handleToggle}>{trigger}</div>
       ) : (
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleToggle}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-sena-ink',
             triggerClassName
@@ -45,9 +61,12 @@ export default function Dropdown({
       )}
       {open && (
         <div
+          ref={menuRef}
           className={cn(
-            'absolute z-30 mt-1.5 min-w-[9rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-overlay animate-scale-in',
-            align === 'right' ? 'right-0' : 'left-0'
+            'absolute z-30 min-w-[9rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-overlay animate-scale-in',
+            openUp ? 'bottom-full mb-1.5' : 'mt-1.5',
+            align === 'right' ? 'right-0' : 'left-0',
+            'max-h-[60vh] overflow-y-auto scrollbar-thin'
           )}
         >
           {items.map((item, i) =>
