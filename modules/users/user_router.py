@@ -120,10 +120,30 @@ async def download_import_template(
     )
 
 
+@router.post("/bulk-status", status_code=status.HTTP_200_OK)
+async def bulk_status(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_admin_user),
+):
+    """
+    Suspende o reactiva varios usuarios en una sola operación.
+
+    Body esperado: {"user_ids": [1,2,3], "action": "suspender" | "reactivar"}
+    """
+    user_ids = payload.get("user_ids")
+    action = payload.get("action")
+    if not isinstance(user_ids, list) or not all(isinstance(x, int) for x in user_ids):
+        raise HTTPException(status_code=400, detail="user_ids debe ser una lista de enteros.")
+    service = UserService(db)
+    return await service.bulk_status(user_ids, action, current_user.get("id"))
+
+
 @router.post("/import-excel", status_code=status.HTTP_200_OK)
 async def import_users_excel(
     file: UploadFile = File(..., description="Archivo .xlsx con columnas Documento, Correo, Nombres..."),
     grupo_id: Annotated[int | None, Form(description="ID del grupo (ficha) destino. Opcional.")] = None,
+    ficha: Annotated[str | None, Form(description="Número de ficha esperada. Opcional; cuando se envía, las filas del Excel deben coincidir con ella.")] = None,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_coordinador_user),
 ):
@@ -152,8 +172,25 @@ async def import_users_excel(
         )
         if not existe.first():
             raise HTTPException(status_code=404, detail="Grupo no encontrado.")
+    expected_ficha = None
+    if ficha is not None:
+        from sqlalchemy import text as _text2
+        r = await db.execute(
+            _text2("SELECT f.number, f.id FROM fichas f WHERE f.number = :n;"), {"n": ficha}
+        )
+        row = r.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"La ficha {ficha} no existe.")
+        expected_ficha = str(row["number"])
+        if grupo_id is not None:
+            gid = await db.execute(_text2("SELECT number FROM fichas WHERE id = :id;"), {"id": grupo_id})
+            grow = gid.mappings().first()
+            if grow and str(grow["number"]) != expected_ficha:
+                raise HTTPException(status_code=400, detail=f"La ficha del parámetro ({ficha}) no coincide con el grupo seleccionado ({grow['number']}).")
     service = UserService(db)
-    resultado = await service.import_users_excel(contents, forzar_rol_aprendiz=grupo_id is not None)
+    resultado = await service.import_users_excel(
+        contents, forzar_rol_aprendiz=grupo_id is not None, expected_ficha=expected_ficha
+    )
     if grupo_id is not None:
         extra = await service.asignar_importados_a_grupo(grupo_id, resultado.get("detalle", []))
         resultado.update(extra)

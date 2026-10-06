@@ -607,12 +607,62 @@ class UserService:
             )
 
     # ============================
+    # ESTADO MASIVO (SUSPENDER/REACTIVAR)
+    # Una sola operación transaccional;
+    # nunca elimina datos.
+    # ============================
+
+    async def bulk_status(self, user_ids: list[int], action: str, current_user_id: int | None = None) -> dict:
+        if action not in ("suspender", "reactivar"):
+            raise HTTPException(status_code=400, detail="Acción inválida. Use 'suspender' o 'reactivar'.")
+        if not user_ids:
+            raise HTTPException(status_code=400, detail="Debe enviar al menos un ID.")
+        ids = list(dict.fromkeys(user_ids))  # deduplicar preservando orden
+        if len(ids) != len(user_ids):
+            # deduplicado silencioso: aceptamos, pero reportamos
+            pass
+
+        for uid in ids:
+            if not await self._user_exists(uid):
+                raise HTTPException(status_code=404, detail=f"El usuario ID {uid} no existe.")
+        if action == "suspender" and current_user_id is not None and current_user_id in ids:
+            raise HTTPException(status_code=400, detail="No puedes suspender tu propia cuenta.")
+
+        if action == "suspender":
+            target = "INACTIVE"
+            not_in_state = "user_status IN ('ACTIVE', 'ACTIVO')"
+        else:
+            target = "ACTIVE"
+            not_in_state = "user_status = 'INACTIVE'"
+
+        result = await self.db.execute(
+            text(f"UPDATE users SET user_status = :target WHERE id = ANY(:ids) AND {not_in_state} RETURNING id;"),
+            {"target": target, "ids": ids},
+        )
+        modificados = [row[0] for row in result.all()]
+        sin_cambios = [uid for uid in ids if uid not in modificados]
+        await self.db.commit(); await _invalidate_user_caches()
+        return {
+            "accion": action,
+            "procesados": len(ids),
+            "modificados": len(modificados),
+            "sin_cambios": len(sin_cambios),
+            "ids": modificados,
+            "sin_cambios_ids": sin_cambios,
+        }
+
+    # ============================
     # CARGA MASIVA EXCEL
     # Acepta el .xlsx original del profe con alias en español.
     # Con grupo_id (endpoint), además matricula Aprendices en el grupo.
     # ============================
 
-    async def import_users_excel(self, contenido: bytes, forzar_rol_aprendiz: bool = False) -> dict:
+    async def import_users_excel(
+        self,
+        contenido: bytes,
+        forzar_rol_aprendiz: bool = False,
+        expected_ficha: str | None = None,
+    ) -> dict:
         """
         Importa usuarios desde un .xlsx fila por fila.
 
@@ -715,7 +765,13 @@ class UserService:
                     ficha_id = fichas_map.get(ficha_raw)
                     if ficha_id is None:
                         raise ValueError(f"La ficha {ficha_raw} no existe.")
+                    if expected_ficha is not None:
+                        norm = lambda v: str(v).strip().removesuffix(".0")
+                        if norm(ficha_raw) != norm(expected_ficha):
+                            raise ValueError(f"La ficha {ficha_raw} no coincide con la ficha seleccionada {expected_ficha}.")
 
+                if ficha_raw == "" and expected_ficha is not None:
+                    ficha_id = fichas_map.get(str(expected_ficha).strip())
                 if await self._document_exists(documento) or await self._email_exists(correo):
                     duplicados += 1
                     detalle.append({"fila": n, "estado": "duplicado", "documento": documento,

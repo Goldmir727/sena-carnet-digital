@@ -47,6 +47,18 @@ export function useDeactivateUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
 }
+export function useBulkUserStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ user_ids, action }) =>
+      api.post('/users/bulk-status', { user_ids, action }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['users', 'search'] });
+    },
+  });
+}
+
 export function useUploadPhoto() {
   const qc = useQueryClient();
   return useMutation({
@@ -64,10 +76,13 @@ export function useUploadPhoto() {
 export function useImportUsersExcel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, grupo_id }) => {
+    mutationFn: ({ file, grupo_id, ficha }) => {
       const form = new FormData();
       if (grupo_id !== undefined && grupo_id !== null) {
         form.append('grupo_id', grupo_id);
+      }
+      if (ficha !== undefined && ficha !== null && ficha !== '') {
+        form.append('ficha', ficha);
       }
       form.append('file', file);
       return api

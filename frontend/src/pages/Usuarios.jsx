@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
-import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel, downloadImportTemplate } from '../api/users';
+import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel, downloadImportTemplate, useBulkUserStatus } from '../api/users';
 import { useRoles } from '../api/roles';
 import ExcelImportPreview from '../components/import/ExcelImportPreview';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
@@ -98,11 +98,14 @@ export default function Usuarios() {
   const importExcel = useImportUsersExcel();
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [fichaEsperada, setFichaEsperada] = useState('');
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [rolTab, setRolTab] = useState('Todos');
-
+  const [sel, setSel] = useState(() => new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(null);
+  const bulkMut = useBulkUserStatus();
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 350);
     return () => clearTimeout(t);
@@ -286,10 +289,11 @@ export default function Usuarios() {
       toast.error('Selecciona un archivo .xlsx');
       return;
     }
-    importExcel.mutate({ file: importFile }, {
+    importExcel.mutate({ file: importFile, ficha: fichaEsperada.trim() || undefined }, {
       onSuccess: (r) => {
         setImportResult(r);
-        toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${r.errores} errores`);
+        const errs = Array.isArray(r.errores) ? r.errores.length : r.errores;
+        toast.success(`${r.insertados} insertados, ${r.duplicados} duplicados, ${errs} errores`);
       },
       onError: (err) => toast.error(getErr(err)),
     });
@@ -298,6 +302,43 @@ export default function Usuarios() {
   const roleOptions = Array.isArray(rolesQuery.data) ? rolesQuery.data.map((r) => ({ value: r.id, label: r.name })) : [];
 
   const columns = [
+    {
+      key: 'sel',
+      label: (
+        <input
+          type="checkbox"
+          aria-label="Seleccionar todos los visibles"
+          checked={displayRows.length > 0 && displayRows.every((r) => sel.has(r.id))}
+          onChange={() => {
+            const ids = displayRows.map((r) => r.id);
+            setSel((prev) => {
+              const all = ids.every((id) => prev.has(id)) && ids.length > 0;
+              const next = new Set(prev);
+              if (all) ids.forEach((id) => next.delete(id));
+              else ids.forEach((id) => next.add(id));
+              return next;
+            });
+          }}
+          className="h-4 w-4 accent-sena-green"
+        />
+      ),
+      render: (r) => (
+        <input
+          type="checkbox"
+          aria-label={`Seleccionar ${r.nombres || r.email}`}
+          checked={sel.has(r.id)}
+          onChange={() =>
+            setSel((prev) => {
+              const next = new Set(prev);
+              if (next.has(r.id)) next.delete(r.id);
+              else next.add(r.id);
+              return next;
+            })
+          }
+          className="h-4 w-4 accent-sena-green"
+        />
+      ),
+    },
     {
       key: 'nombre',
       label: 'Usuario',
@@ -390,7 +431,7 @@ export default function Usuarios() {
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Usuarios' }]}
         actions={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => { setImportResult(null); setImportFile(null); setImportPreview(null); setImportOpen(true); }}>
+            <Button variant="secondary" onClick={() => { setImportResult(null); setImportFile(null); setImportPreview(null); setFichaEsperada(''); setImportOpen(true); }}>
               Importar Excel
             </Button>
             <Button icon={UserPlus} onClick={openCreate}>
@@ -457,6 +498,54 @@ export default function Usuarios() {
             </button>
           ))}
         </div>
+
+        {sel.size > 0 && (
+          <div className="flex flex-col gap-3 rounded-xl border border-sena-tint-200 bg-sena-tint-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-sena-green-dark">
+              {sel.size} usuario{sel.size === 1 ? '' : 's'} seleccionado{sel.size === 1 ? '' : 's'}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {(() => {
+                const activosSel = (allQueryForCards.data || []).filter(
+                  (u) => sel.has(u.id) && (u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status)),
+                );
+                const suspendSel = (allQueryForCards.data || []).filter(
+                  (u) => sel.has(u.id) && !(u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status)),
+                );
+                return (
+                  <>
+                    {activosSel.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={bulkMut.isPending}
+                        onClick={() => setBulkConfirm({ action: 'suspender', ids: activosSel.map((u) => u.id) })}
+                      >
+                        Suspender seleccionados ({activosSel.length})
+                      </Button>
+                    )}
+                    {suspendSel.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={bulkMut.isPending}
+                        onClick={() => setBulkConfirm({ action: 'reactivar', ids: suspendSel.map((u) => u.id) })}
+                      >
+                        Reactivar seleccionados ({suspendSel.length})
+                      </Button>
+                    )}
+                    {activosSel.length > 0 && suspendSel.length > 0 && (
+                      <p className="text-xs text-slate-500">Cada acción se aplica solo a los usuarios del estado correspondiente.</p>
+                    )}
+                  </>
+                );
+              })()}
+              <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>
+                Limpiar selección
+              </Button>
+            </div>
+          </div>
+        )}
 
         {usersQuery.isError ? (
           <ErrorState
@@ -569,6 +658,32 @@ export default function Usuarios() {
         confirmLabel="Suspender"
       />
       <ConfirmDialog
+        open={!!bulkConfirm}
+        onClose={() => setBulkConfirm(null)}
+        onConfirm={async () => {
+          try {
+            const r = await bulkMut.mutateAsync({ user_ids: bulkConfirm.ids, action: bulkConfirm.action });
+            toast.success(
+              bulkConfirm.action === 'suspender'
+                ? `${r.modificados} usuario(s) suspendido(s) correctamente.`
+                : `${r.modificados} usuario(s) reactivado(s) correctamente.`,
+            );
+            setSel(new Set());
+            setBulkConfirm(null);
+          } catch (e) {
+            toast.error(getErr(e));
+          }
+        }}
+        loading={bulkMut.isPending}
+        title={bulkConfirm?.action === 'suspender' ? `¿Deseas suspender ${bulkConfirm?.ids.length} usuarios?` : `¿Deseas reactivar ${bulkConfirm?.ids.length} usuarios?`}
+        description={
+          bulkConfirm?.action === 'suspender'
+            ? 'Sus cuentas dejarán de estar activas, pero sus datos e historial no serán eliminados.'
+            : 'Recuperarán el acceso al sistema y a su carnet digital.'
+        }
+        confirmLabel={bulkConfirm?.action === 'suspender' ? 'Suspender' : 'Reactivar'}
+      />
+      <ConfirmDialog
         open={!!reactivarRow}
         onClose={() => setReactivarRow(null)}
         onConfirm={onReactivar}
@@ -616,6 +731,16 @@ export default function Usuarios() {
               Plantilla
             </Button>
           </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-slate-500">Ficha esperada (opcional: valida que el Excel no la cambie)</label>
+            <input
+              type="text"
+              value={fichaEsperada}
+              onChange={(e) => setFichaEsperada(e.target.value)}
+              placeholder="Ej. 2670001"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-sena-ink focus:border-sena-green focus:outline-none"
+            />
+          </div>
           <ExcelImportPreview
             onReady={({ file, preview, previewLoading }) => {
               setImportFile(file);
@@ -630,7 +755,7 @@ export default function Usuarios() {
               <p>Procesados: <strong>{importResult.procesados}</strong></p>
               <p>Insertados: <strong>{importResult.insertados}</strong></p>
               <p>Duplicados: <strong>{importResult.duplicados}</strong></p>
-              <p>Errores: <strong>{importResult.errores}</strong></p>
+              <p>Errores: <strong>{Array.isArray(importResult.errores) ? importResult.errores.length : importResult.errores}</strong></p>
               {(importResult.detalle || []).filter((d) => d.estado !== 'insertado').slice(0, 10).map((d, i) => (
                 <p key={i} className="truncate text-xs text-slate-400">
                   Fila {d.fila}: {d.estado}{d.mensaje ? ` — ${d.mensaje}` : ''} ({d.documento || '—'})
