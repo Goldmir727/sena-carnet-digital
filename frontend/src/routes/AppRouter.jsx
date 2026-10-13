@@ -8,6 +8,7 @@ import ResetPassword from '../pages/ResetPassword';
 import Dashboard from '../pages/Dashboard';
 import NotFound from '../pages/NotFound';
 import ModulePlaceholder from '../pages/ModulePlaceholder';
+import LlegadasTarde from '../pages/LlegadasTarde';
 
 export default function AppRouter() {
   return (
@@ -57,6 +58,14 @@ export default function AppRouter() {
             element={
               <PermissionRoute permission="asistencia.grupo.read">
                 <ModulePlaceholder title="Asistencia" />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="llegadas-tarde"
+            element={
+              <PermissionRoute permission="asistencia.grupo.read">
+                <LlegadasTarde />
               </PermissionRoute>
             }
           />

@@ -30,3 +30,11 @@ export function useAttendanceRange(range) {
     enabled: !!(range?.desde && range?.hasta),
   });
 }
+
+export function useLlegadasTarde(params) {
+  return useQuery({
+    queryKey: ['attendance', 'llegadas-tarde', params],
+    queryFn: async () => (await api.get('/attendance/llegadas-tarde', { params })).data,
+    retry: 1,
+  });
+}
