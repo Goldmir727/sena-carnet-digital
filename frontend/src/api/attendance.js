@@ -30,3 +30,29 @@ export function useAttendanceRange(range) {
     enabled: !!(range?.desde && range?.hasta),
   });
 }
+
+export function useLateArrivals(fichaId) {
+  return useQuery({
+    queryKey: ['attendance', 'llegadas-tarde', fichaId ?? null],
+    queryFn: async () =>
+      (
+        await api.get(
+          '/attendance/llegadas-tarde',
+          fichaId ? { params: { ficha_id: fichaId } } : {},
+        )
+      ).data,
+  });
+}
+
+export function useAbsences(fichaId) {
+  return useQuery({
+    queryKey: ['attendance', 'inasistencias', fichaId ?? null],
+    queryFn: async () =>
+      (
+        await api.get(
+          '/attendance/inasistencias',
+          fichaId ? { params: { ficha_id: fichaId } } : {},
+        )
+      ).data,
+  });
+}

@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
-import { useAttendance, useAttendanceStats, useAttendanceRange } from '../api/attendance';
-import { useMisGrupos } from '../api/grupos';
+import { useAttendance, useAttendanceStats, useAttendanceRange, useLateArrivals, useAbsences } from '../api/attendance';
+import { useMisGrupos, useGrupos } from '../api/grupos';
 import { useAsistenciaGrupo, useAsistenciaStats, useSubirExcel } from '../api/asistencia';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
@@ -23,6 +23,7 @@ import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
+import Badge from '../components/ui/Badge';
 import { fieldClass } from '../components/ui/fields';
 import { getErr } from '../lib/errors';
 
@@ -32,6 +33,15 @@ const fmt = (iso) => {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
+
+const fmtFecha = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const fmtHora = (t) => (t ? String(t).slice(0, 5) : '—');
 
 function DocenteView() {
   const grupos = useMisGrupos();
@@ -310,9 +320,246 @@ function CoordinadorView() {
   );
 }
 
+function useFiltroFicha() {
+  const { user } = useAuth();
+  const esDocente = user?.role_name === 'Docente';
+  // Docente: solo sus fichas (mis-grupos). Coordinador: todas (/grupos/).
+  const misGrupos = useMisGrupos(esDocente);
+  const todosGrupos = useGrupos(!esDocente);
+  const gruposQuery = esDocente ? misGrupos : todosGrupos;
+  const [fichaId, setFichaId] = useState('');
+  return { esDocente, gruposQuery, fichaId, setFichaId };
+}
+
+function FiltroFicha({ esDocente, gruposQuery, fichaId, setFichaId }) {
+  return (
+    <Card>
+      <Select
+        label="Filtrar por ficha"
+        options={[
+          { value: '', label: 'Todas las fichas' },
+          ...(gruposQuery.data || []).map((g) => ({ value: g.id, label: g.nombre })),
+        ]}
+        value={fichaId}
+        onChange={(e) => setFichaId(e.target.value)}
+        allowEmpty={false}
+        hint={
+          esDocente
+            ? 'Solo aparecen las fichas asignadas a ti.'
+            : 'Todas las fichas del sistema.'
+        }
+      />
+    </Card>
+  );
+}
+
+function LlegadasTardeView() {
+  const filtro = useFiltroFicha();
+  const query = useLateArrivals(filtro.fichaId ? Number(filtro.fichaId) : undefined);
+  const rows = query.data || [];
+  const peor = rows.reduce((m, r) => Math.max(m, r.minutos_tarde || 0), 0);
+  const promedio = rows.length
+    ? Math.round(rows.reduce((acc, r) => acc + (r.minutos_tarde || 0), 0) / rows.length)
+    : 0;
+
+  const columns = [
+    {
+      key: 'aprendiz',
+      label: 'Aprendiz',
+      render: (r) => (
+        <span className="font-medium text-sena-ink">
+          {[r.nombres, r.apellidos].filter(Boolean).join(' ') || r.usuario_nombre || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'documento',
+      label: 'Documento',
+      render: (r) => <span className="text-slate-600">{r.usuario_documento || '—'}</span>,
+    },
+    {
+      key: 'grupo',
+      label: 'Grupo / Ficha',
+      render: (r) => (
+        <span className="text-slate-600">{r.grupo_nombre ? `Ficha ${r.grupo_nombre}` : '—'}</span>
+      ),
+    },
+    {
+      key: 'fecha',
+      label: 'Fecha de clase',
+      render: (r) => <span className="text-slate-600">{fmtFecha(r.fecha_sesion)}</span>,
+    },
+    {
+      key: 'inicio',
+      label: 'Inicio programado',
+      render: (r) => <span className="text-slate-600">{fmtHora(r.inicio_programado)}</span>,
+    },
+    {
+      key: 'llegada',
+      label: 'Hora de llegada',
+      render: (r) => <span className="text-slate-600">{fmt(r.fecha_hora)}</span>,
+    },
+    {
+      key: 'minutos',
+      label: 'Minutos tarde',
+      render: (r) => (
+        <Badge variant={(r.minutos_tarde || 0) >= 15 ? 'red' : 'yellow'}>
+          {r.minutos_tarde ?? '—'} min
+        </Badge>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <FiltroFicha {...filtro} />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Clock} label="Llegadas tarde" value={rows.length} accent="yellow" />
+        <StatCard
+          icon={AlertTriangle}
+          label="Peor retraso"
+          value={rows.length ? `${peor} min` : '—'}
+          accent="red"
+        />
+        <StatCard
+          icon={CalendarCheck}
+          label="Promedio de retraso"
+          value={rows.length ? `${promedio} min` : '—'}
+          accent="dark"
+        />
+      </div>
+
+      <p className="text-xs text-slate-400">
+        {rows.length} registro{rows.length === 1 ? '' : 's'} con llegada posterior al inicio programado
+      </p>
+
+      {query.isError ? (
+        <ErrorState
+          title="No se pudieron cargar las llegadas tarde"
+          message={getErr(query.error)}
+          onRetry={query.refetch}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={rows}
+          loading={query.isLoading}
+          emptyTitle="Sin llegadas tarde"
+          emptyMessage="Cuando un aprendiz registre su llegada después del inicio programado de una clase, aparecerá aquí."
+          emptyIcon={Clock}
+          keyField="id"
+        />
+      )}
+    </div>
+  );
+}
+
+function InasistenciasView() {
+  const filtro = useFiltroFicha();
+  const query = useAbsences(filtro.fichaId ? Number(filtro.fichaId) : undefined);
+  const rows = query.data || [];
+
+  const columns = [
+    {
+      key: 'aprendiz',
+      label: 'Aprendiz',
+      render: (r) => (
+        <span className="font-medium text-sena-ink">
+          {[r.nombres, r.apellidos].filter(Boolean).join(' ') || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'documento',
+      label: 'Documento',
+      render: (r) => <span className="text-slate-600">{r.usuario_documento || '—'}</span>,
+    },
+    {
+      key: 'grupo',
+      label: 'Grupo / Programa',
+      render: (r) => (
+        <span className="text-slate-600">
+          {r.grupo_nombre ? `Ficha ${r.grupo_nombre}` : '—'}
+          {r.programa_nombre ? (
+            <span className="block text-xs text-slate-400">{r.programa_nombre}</span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      key: 'fecha',
+      label: 'Fecha de sesión',
+      render: (r) => <span className="text-slate-600">{fmtFecha(r.fecha_sesion)}</span>,
+    },
+    {
+      key: 'horario',
+      label: 'Horario',
+      render: (r) => (
+        <span className="text-slate-600">
+          {fmtHora(r.inicio)} – {fmtHora(r.fin)}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      label: 'Estado de sesión',
+      render: (r) => (
+        <Badge variant={r.estado_sesion === 'realizada' ? 'green' : 'slate'}>
+          {r.estado_sesion || '—'}
+        </Badge>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <FiltroFicha {...filtro} />
+
+      <Card>
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-sena-green" />
+          <div>
+            <h2 className="text-base font-semibold text-sena-ink">¿Cómo se calcula una inasistencia?</h2>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              Se muestra un aprendiz solo cuando tiene matrícula activa en la ficha, la sesión ya
+              finalizó (de una fecha anterior, o la de hoy marcada como «realizada») y no existe
+              ningún registro de asistencia para esa sesión. Las sesiones programadas para hoy o
+              futuras no cuentan como inasistencia. Docente ve solo sus fichas; Coordinador ve todas.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <div className="flex justify-end">
+        <p className="text-xs text-slate-400">{rows.length} inasistencia{rows.length === 1 ? '' : 's'} detectada{rows.length === 1 ? '' : 's'}</p>
+      </div>
+
+      {query.isError ? (
+        <ErrorState
+          title="No se pudieron cargar las inasistencias"
+          message={getErr(query.error)}
+          onRetry={query.refetch}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={rows}
+          loading={query.isLoading}
+          emptyTitle="Sin inasistencias"
+          emptyMessage="No hay ausencias confirmadas en sesiones finalizadas de tus grupos."
+          emptyIcon={UserX2}
+          keyField="id"
+        />
+      )}
+    </div>
+  );
+}
+
 export default function Asistencia() {
   const { user } = useAuth();
   const esDocente = user?.role_name === 'Docente';
+  const [pestaña, setPestaña] = useState('asistencias');
 
   return (
     <div className="space-y-6">
@@ -327,7 +574,37 @@ export default function Asistencia() {
         icon={CalendarCheck}
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Asistencia' }]}
       />
-      {esDocente ? <DocenteView /> : <CoordinadorView />}
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: 'asistencias', label: 'Asistencias' },
+          { id: 'llegadas-tarde', label: 'Llegadas tarde' },
+          { id: 'inasistencias', label: 'Inasistencias' },
+        ].map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPestaña(p.id)}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+              pestaña === p.id
+                ? 'border-sena-green bg-sena-green text-white shadow-soft'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-sena-green hover:text-sena-green-dark'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {pestaña === 'llegadas-tarde' ? (
+        <LlegadasTardeView />
+      ) : pestaña === 'inasistencias' ? (
+        <InasistenciasView />
+      ) : esDocente ? (
+        <DocenteView />
+      ) : (
+        <CoordinadorView />
+      )}
     </div>
   );
 }

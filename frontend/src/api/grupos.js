@@ -1,17 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './client';
 
-export function useGrupos() {
+export function useGrupos(enabled = true) {
   return useQuery({
     queryKey: ['grupos'],
     queryFn: async () => (await api.get('/grupos/')).data,
+    enabled,
   });
 }
 
-export function useMisGrupos() {
+export function useMisGrupos(enabled = true) {
   return useQuery({
     queryKey: ['grupos', 'mios'],
     queryFn: async () => (await api.get('/grupos/mis-grupos')).data,
+    enabled,
   });
 }
 
