@@ -24,11 +24,10 @@ import Dropdown from '../components/ui/Dropdown';
 import StatusBadge from '../components/ui/StatusBadge';
 import ErrorState from '../components/ui/ErrorState';
 
-const ESTADOS = ['Activo', 'Suspendido', 'Vencido', 'Inactivo'];
+const ESTADOS = ['Activo', 'Vencido', 'Inactivo'];
 
 const TRANSICIONES = {
-  Activo: ['Suspendido', 'Vencido'],
-  Suspendido: ['Activo', 'Vencido', 'Inactivo'],
+  Activo: ['Vencido'],
   Vencido: ['Activo', 'Inactivo'],
   Inactivo: [],
 };

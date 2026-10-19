@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,11 +102,11 @@ class ReportsService:
             conds.append("s.ficha_id = :g")
             params["g"] = grupo_id
         if desde:
-            conds.append("DATE(a.time) >= DATE(:d)")
-            params["d"] = desde
+            conds.append("DATE(a.time) >= :d")
+            params["d"] = date.fromisoformat(desde)
         if hasta:
-            conds.append("DATE(a.time) <= DATE(:h)")
-            params["h"] = hasta
+            conds.append("DATE(a.time) <= :h")
+            params["h"] = date.fromisoformat(hasta)
         where = f"WHERE {' AND '.join(conds)}" if conds else ""
         query = text(f"""
                  SELECT a.id, a.time AS fecha_hora, s.ficha_id AS grupo_id, a.session_id AS qr_clase_id,

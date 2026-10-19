@@ -197,9 +197,7 @@ export default function Reportes() {
                   options={[
                     { value: '', label: 'Todos los estados' },
                     { value: 'Activo', label: 'Activo' },
-                    { value: 'Suspendido', label: 'Suspendido' },
                     { value: 'Vencido', label: 'Vencido' },
-                    { value: 'Inactivo', label: 'Inactivo' },
                   ]}
                   value={estadoFilter}
                   onChange={(e) => setEstadoFilter(e.target.value)}

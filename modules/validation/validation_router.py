@@ -31,18 +31,18 @@ async def check_carnet_status(
     if codigo.isdigit():
         res = await db.execute(
             text(
-                "SELECT c.status AS estado, u.id AS user_id, u.name AS nombres, "
-                "u.last_name AS apellidos FROM carnets c JOIN users u ON u.id=c.user_id "
-                "WHERE c.id = :id;"
+                "SELECT CASE WHEN c.expiration_date < CURRENT_DATE THEN 'Vencido' ELSE 'Activo' END AS estado, "
+                "u.id AS user_id, u.name AS nombres, u.last_name AS apellidos "
+                "FROM carnets c JOIN users u ON u.id=c.user_id WHERE c.id = :id;"
             ),
             {"id": int(codigo)},
         )
     else:
         res = await db.execute(
             text(
-                "SELECT c.status AS estado, u.id AS user_id, u.name AS nombres, "
-                "u.last_name AS apellidos FROM carnets c JOIN users u ON u.id=c.user_id "
-                "WHERE c.qr_code = :codigo;"
+                "SELECT CASE WHEN c.expiration_date < CURRENT_DATE THEN 'Vencido' ELSE 'Activo' END AS estado, "
+                "u.id AS user_id, u.name AS nombres, u.last_name AS apellidos "
+                "FROM carnets c JOIN users u ON u.id=c.user_id WHERE c.qr_code = :codigo;"
             ),
             {"codigo": codigo},
         )

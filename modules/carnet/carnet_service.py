@@ -13,7 +13,7 @@ from services.qr_service import generate_qr_token
 async def invalidate_carnet_cache(user_id: int | None = None) -> None:
     if user_id is not None:
         await cache_delete(f"carnets:user:{user_id}")
-    await cache_delete("carnets:all", "reports:*")
+    await cache_delete("carnets:all*", "reports:*")
 
 
 ESTADOS_VALIDOS = {"Activo", "Suspendido", "Vencido", "Inactivo"}
