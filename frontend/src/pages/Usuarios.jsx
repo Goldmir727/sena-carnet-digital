@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
 import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel, downloadImportTemplate, useBulkUserStatus } from '../api/users';
 import { useRoles } from '../api/roles';
+import { useAuth } from '../hooks/useAuth';
 import ExcelImportPreview from '../components/import/ExcelImportPreview';
 import { ROLE_ID_NAME, ROLE_BADGE_STYLES } from '../constants/roles';
 import PageHeader from '../components/ui/PageHeader';
@@ -82,6 +83,7 @@ function initials(nombres, apellidos, email) {
 }
 
 export default function Usuarios() {
+  const { user: authUser } = useAuth();
   const [estadoTab, setEstadoTab] = useState('activos');
   const [reactivarRow, setReactivarRow] = useState(null);
   const usersQuery = useUsers(estadoTab);
@@ -231,9 +233,10 @@ export default function Usuarios() {
   };
 
   const onUpdate = async () => {
+    const esPropio = !!editing && authUser?.id === editing.id;
     const payload = {
       email: form.email.trim(),
-      role_id: Number(form.role_id),
+      ...(esPropio ? {} : { role_id: Number(form.role_id) }),
       ...(form.nombres.trim() && { nombres: form.nombres.trim() }),
       ...(form.apellidos.trim() && { apellidos: form.apellidos.trim() }),
       ...(form.tipo_documento && { tipo_documento: form.tipo_documento }),
@@ -594,7 +597,7 @@ export default function Usuarios() {
           <Input label="Usuario" value={form.username} onChange={set('username')} error={formErrors.username} disabled={!!editing} hint={editing ? 'No se puede cambiar' : 'Usa el documento o un apodo único'} />
           <Input label="Correo electrónico" type="email" icon={Mail} value={form.email} onChange={set('email')} error={formErrors.email} />
           <Input label={editing ? 'Nueva contraseña' : 'Contraseña'} type="password" icon={Lock} value={form.password} onChange={set('password')} error={formErrors.password} hint={editing ? 'Opcional en edición' : 'Mínimo 6 caracteres'} />
-          <Select label="Rol" options={roleOptions} value={form.role_id} onChange={set('role_id')} error={formErrors.role_id} placeholder="Selecciona el rol" />
+          <Select label="Rol" options={roleOptions} value={form.role_id} onChange={set('role_id')} error={formErrors.role_id} placeholder="Selecciona el rol" disabled={!!editing && authUser?.id === editing.id} hint={!!editing && authUser?.id === editing.id ? 'No puedes cambiar tu propio rol' : undefined} />
           <Input label="Nombres" value={form.nombres} onChange={set('nombres')} />
           <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} />
           <Select label="Tipo de documento" options={TIPOS_DOC} value={form.tipo_documento} onChange={set('tipo_documento')} placeholder="Selecciona" allowEmpty={false} />
