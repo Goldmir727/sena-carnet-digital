@@ -119,7 +119,7 @@ app.include_router(sesion_router)
 app.include_router(programa_router)
 app.include_router(regional_router)
 
-import os
 from core.config import settings
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads/fotos", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
+# La fotografía de perfil ya no se sirve por montaje estático público.
+# Las lecturas de foto pasan por el endpoint autorizado GET /users/{user_id}/foto.
