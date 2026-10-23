@@ -55,13 +55,69 @@ class ValidationService:
         except Exception:
             return False
 
+    async def _validate_printed_qr(self, qr_token: str, ubicacion: str | None) -> dict:
+        """
+        Valida el QR impreso en el carnet físico.
+
+        Este token (payload con uuid, sin user_id ni timestamp) se emite una vez
+        al generar el carnet y queda grabado en carnets.qr_code. No expira a los
+        15 minutos ni es de un solo uso: su vigencia es la del carnet impreso.
+        Se busca el carnet exacto por token para que un carnet regenerado deje
+        de validar el QR anterior.
+        """
+        result = await self.db.execute(
+            text("""
+                SELECT c.id AS carnet_id,
+                       CASE WHEN c.expiration_date < CURRENT_DATE THEN 'Vencido' ELSE 'Activo' END AS estado,
+                       u.id AS user_id, u.name AS nombres, u.last_name AS apellidos,
+                       u.document AS numero_documento, u.document_type AS tipo_documento,
+                       u.photo_profile AS foto_perfil
+                FROM carnets c
+                JOIN users u ON u.id = c.user_id
+                WHERE c.qr_code = :token
+                ORDER BY c.id DESC LIMIT 1;
+            """),
+            {"token": qr_token},
+        )
+        carnet = result.mappings().first()
+
+        if not carnet:
+            await self._log(None, "DENEGADO", "QR impreso no registrado", ubicacion)
+            return {"permitido": False, "mensaje": "Acceso Denegado - QR no registrado en el sistema", "usuario": None, "carnet_estado": None}
+
+        if carnet["estado"] != "Activo":
+            mensaje = f"Acceso Denegado - Carnet {carnet['estado']}"
+            await self._log(carnet["user_id"], "DENEGADO", mensaje, ubicacion)
+            return {"permitido": False, "mensaje": mensaje,
+                    "usuario": {"nombres": carnet["nombres"], "apellidos": carnet["apellidos"]},
+                    "carnet_estado": carnet["estado"]}
+
+        await self._log(carnet["user_id"], "PERMITIDO", "Acceso Permitido (QR impreso)", ubicacion)
+        return {
+            "permitido": True,
+            "mensaje": "Acceso Permitido",
+            "usuario": {
+                "id": carnet["user_id"],
+                "nombres": carnet["nombres"],
+                "apellidos": carnet["apellidos"],
+                "numero_documento": carnet["numero_documento"],
+                "tipo_documento": carnet["tipo_documento"],
+                "foto_perfil": carnet["foto_perfil"],
+            },
+            "carnet_estado": "Activo",
+        }
+
     async def validate_qr(self, qr_token: str, ubicacion: str | None = None) -> dict:
         logger.info("Validando token QR")
 
         payload = decode_qr_payload(qr_token)
-        if not payload or payload.get("type") != "carnet" or not payload.get("user_id"):
+        if not payload or payload.get("type") != "carnet":
             await self._log(None, "DENEGADO", "Token QR inválido o corrupto", ubicacion)
             return {"permitido": False, "mensaje": "Acceso Denegado - Token QR inválido o corrupto", "usuario": None, "carnet_estado": None}
+
+        # QR del carnet impreso: se resuelve por token contra carnets.qr_code.
+        if payload.get("user_id") is None:
+            return await self._validate_printed_qr(qr_token, ubicacion)
 
         user_id = int(payload["user_id"])
 
