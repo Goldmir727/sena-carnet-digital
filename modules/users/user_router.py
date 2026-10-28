@@ -359,3 +359,60 @@ async def upload_foto(
     service = UserService(db)
     # Registrar la ruta de la imagen en la base de datos
     return await service.update_foto(user_id, filepath)
+
+
+@router.get("{user_id}/foto", status_code=status.HTTP_200_OK)
+async def get_foto(
+    user_id: Annotated[int, Path(description="ID del usuario.")],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene la fotografía de perfil de un usuario.
+    Permite que:
+    - El coordinador vea la foto de cualquier usuario.
+    - Un usuario vea únicamente su propia foto.
+    """
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    # Verificar permisos
+    if current_user["role_name"] != ADMIN_ROLE and current_user["id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permiso para ver esta fotografía.",
+        )
+    # Buscar el archivo
+    upload_dir = Path(settings.UPLOAD_DIR)
+    pattern = f"user_{user_id}.*"
+    foto_files = list(upload_dir.glob(pattern))
+    if not foto_files:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Foto no encontrada."
+        )
+    foto_file = foto_files[0]
+    return FileResponse(path=foto_file, media_type="image/*")
+
+@router.delete("{user_id}/foto", status_code=status.HTTP_200_OK)
+async def delete_foto(
+    user_id: Annotated[int, Path(description="ID del usuario.")],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Elimina la fotografía de perfil de un usuario.
+    Solo el coordinador o el propio usuario pueden eliminar.
+    """
+    if current_user["role_name"] != ADMIN_ROLE and current_user["id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permiso para eliminar esta fotografía.",
+        )
+    # Buscar y eliminar el archivo
+    upload_dir = Path(settings.UPLOAD_DIR)
+    pattern = f"user_{user_id}.*"
+    foto_files = list(upload_dir.glob(pattern))
+    for f in foto_files:
+        f.unlink(missing_ok=True)
+    # Limpiar referencia en la base de datos
+    service = UserService(db)
+    return await service.update_foto(user_id, None)

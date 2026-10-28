@@ -12,6 +12,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    command: --requirepass redis_password
+    environment:
+      - REDIS_PASSWORD=redis_password
 
   api:
     build: .
@@ -21,7 +24,7 @@ services:
     env_file:
       - .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis_password@redis:6379/0
     volumes:
       - ./uploads:/app/uploads
     depends_on:
