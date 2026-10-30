@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './client';
+import API_BASE from './base';
 
 export function useMiCarnet() {
   return useQuery({
@@ -48,7 +49,7 @@ export function useCambiarEstadoCarnet() {
   });
 }
 
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const BASE = API_BASE;
 
 export function carnetQrUrl(id) {
   return `${BASE}/carnets/${id}/qr`;

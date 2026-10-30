@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErr } from '../lib/errors';
+import API_BASE from '../api/base';
 import { useUsers, useUsersSearch, useCreateUser, useUpdateUser, useDeactivateUser, useUploadPhoto, useImportUsersExcel, downloadImportTemplate, useBulkUserStatus } from '../api/users';
 import { useRoles } from '../api/roles';
 import { useAuth } from '../hooks/useAuth';
@@ -31,7 +32,7 @@ import Dropdown from '../components/ui/Dropdown';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
 
-const MEDIA_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const MEDIA_BASE = API_BASE;
 
 function photoUrl(foto) {
   if (!foto) return null;

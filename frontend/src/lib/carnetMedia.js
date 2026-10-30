@@ -1,6 +1,7 @@
 import { getAccessToken } from '../utils/session';
+import API_BASE from '../api/base';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const BASE = API_BASE;
 
 const C_GREEN = '#0F7A4D';
 const C_GREEN_DARK = '#0A5A39';

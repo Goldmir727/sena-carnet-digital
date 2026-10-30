@@ -5,9 +5,10 @@ import {
   setAccessToken,
   hardLogout,
 } from '../utils/session';
+import API_BASE from './base';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 });
 

@@ -58,6 +58,29 @@ async def lifespan(app: FastAPI):
     logger.info("Cerrando recursos de la API de forma segura.")
 
 
+class StripApiPrefixMiddleware:
+    """Acepta peticiones con prefijo /api además de las rutas raíz.
+
+    Vercel Services entrega al servicio la ruta original de la petición. Si
+    el transform request.path no se aplica, FastAPI recibe /api/auth/login
+    y responde 404. Este middleware elimina el prefijo para que funcionen
+    tanto /api/auth/login como /auth/login.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path == "/api" or path.startswith("/api/"):
+                new_path = path[4:] or "/"
+                scope = dict(scope)
+                scope["path"] = new_path
+                scope["raw_path"] = new_path.encode("utf-8")
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(
     title="Sistema de Gestión de Carnets Digitales",
     version="4.0.0",
@@ -79,6 +102,8 @@ allow_origins=[
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(StripApiPrefixMiddleware)
 
 
 @app.get("/health", tags=["Sistema"])

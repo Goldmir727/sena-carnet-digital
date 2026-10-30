@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Camera, CheckCircle2, Droplet, Building2, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUpdateUser, useUploadPhoto } from '../api/users';
+import API_BASE from '../api/base';
 import { getErr } from '../lib/errors';
 import PageHeader from './ui/PageHeader';
 import Card from './ui/Card';
@@ -22,9 +23,8 @@ function initials(nombres, apellidos, email) {
 function photoUrl(foto) {
   if (!foto) return null;
   if (/^https?:\/\//i.test(foto)) return foto;
-  const base = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
   const clean = String(foto).replace(/\\/g, '/').replace(/^\/+/, '');
-  return `${base}/${clean}`;
+  return `${API_BASE}/${clean}`;
 }
 
 /**

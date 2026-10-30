@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import api from './client';
+import API_BASE from './base';
 import { getAccessToken } from '../utils/session';
 
 export function useGenerarQrCarnet() {
@@ -14,7 +15,7 @@ export function useGenerarQrClase() {
   });
 }
 
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const BASE = API_BASE;
 
 export function qrImageUrl(token) {
   return `${BASE}/qr/carnet/image?token=${encodeURIComponent(token)}`;
