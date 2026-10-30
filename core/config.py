@@ -9,6 +9,7 @@ class Settings:
     # CRÍTICO en producción: debe venir de variable de entorno real.
     # No se usa valor por defecto útil; el entorno debe configurarlo.
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    QR_SECRET: str = os.getenv("QR_SECRET", "")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "1"))
