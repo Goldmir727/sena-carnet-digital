@@ -39,13 +39,16 @@ class Settings:
 
     def __init__(self) -> None:
         if not self.DATABASE_URL:
-            raise ValueError("CRÍTICO: La variable DATABASE_URL no está configurada en el .env")
+            raise ValueError("CRÍTICO: La variable de entorno DATABASE_URL no está configurada.")
 
         # En producción estas claves deben venir de secretos reales.
         if not self.SECRET_KEY:
-            raise ValueError("CRÍTICO: La variable SECRET_KEY no está configurada en el .env")
+            raise ValueError("CRÍTICO: La variable de entorno SECRET_KEY no está configurada.")
         if not self.QR_SECRET:
-            raise ValueError("CRÍTICO: La variable QR_SECRET no está configurada en el .env")
+            raise ValueError(
+                "CRÍTICO: La variable de entorno QR_SECRET no está configurada. "
+                "Debe ser un secreto independiente de SECRET_KEY."
+            )
 
 
 settings = Settings()
