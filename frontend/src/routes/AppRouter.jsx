@@ -17,6 +17,7 @@ import RegistrarAsistencia from '../pages/RegistrarAsistencia';
 import Reportes from '../pages/Reportes';
 import Validar from '../pages/Validar';
 import QrClase from '../pages/QrClase';
+import Help from '../pages/Help';
 import NotFound from '../pages/NotFound';
 
 export default function AppRouter() {
@@ -115,6 +116,14 @@ export default function AppRouter() {
             element={
               <PermissionRoute permission="validar.qr">
                 <Validar />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="ayuda"
+            element={
+              <PermissionRoute permission="dashboard.view">
+                <Help />
               </PermissionRoute>
             }
           />

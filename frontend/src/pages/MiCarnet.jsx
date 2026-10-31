@@ -16,10 +16,12 @@ import {
   Zap,
   RefreshCw,
   Clock,
+  Pencil,
+  Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMiCarnet } from '../api/carnets';
-import { useUser } from '../api/users';
+import { useUser, useUpdateUser } from '../api/users';
 import { useAuth } from '../hooks/useAuth';
 import { useGenerarQrCarnet, fetchQrImageBlob } from '../api/qr';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
@@ -31,11 +33,19 @@ import StatusBadge from '../components/ui/StatusBadge';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import { getErr } from '../lib/errors';
 
 const fmt = (iso) =>
   iso
     ? new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
     : '—';
+
+const TIPOS_DOC = ['CC', 'CE', 'TI', 'PEP'];
+
+const TIPOS_SANGRE = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
 
 function DetailRow({ icon: Icon, label, value, mono = false }) {
   return (
@@ -79,12 +89,67 @@ export default function MiCarnet() {
   const qrUrlRef = useRef(null);
 
   const generarAccess = useGenerarQrCarnet();
+  const updateUser = useUpdateUser();
   const [accessQr, setAccessQr] = useState(null);
   const [accessUrl, setAccessUrl] = useState(null);
   const [accessError, setAccessError] = useState(false);
   const [accessExpires, setAccessExpires] = useState(null);
   const [now, setNow] = useState(0);
   const accessUrlRef = useRef(null);
+
+  // Edición de los datos personales del propio usuario autenticado.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nombres: '',
+    apellidos: '',
+    email: '',
+    tipo_documento: '',
+    numero_documento: '',
+    tipo_sangre: '',
+    password: '',
+  });
+  const [editErrors, setEditErrors] = useState({});
+
+  const openEdit = () => {
+    const u = user || {};
+    setEditForm({
+      nombres: u.nombres || u.name || '',
+      apellidos: u.apellidos || u.last_name || '',
+      email: u.email || '',
+      tipo_documento: u.tipo_documento || u.document_type || '',
+      numero_documento: u.numero_documento || u.document || '',
+      tipo_sangre: u.tipo_sangre || u.blood_type || '',
+      password: '',
+    });
+    setEditErrors({});
+    setEditOpen(true);
+  };
+
+  const onSaveEdit = async () => {
+    const errs = {};
+    const email = (editForm.email || '').trim();
+    if (!email) errs.email = 'El correo es obligatorio';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Correo inválido';
+    if (editForm.password && editForm.password.length < 6) errs.password = 'La contraseña debe tener mínimo 6 caracteres';
+    setEditErrors(errs);
+    if (Object.keys(errs).length) return;
+    const payload = {
+      email,
+      ...(editForm.nombres.trim() && { nombres: editForm.nombres.trim() }),
+      ...(editForm.apellidos.trim() && { apellidos: editForm.apellidos.trim() }),
+      ...(editForm.tipo_documento && { tipo_documento: editForm.tipo_documento }),
+      ...(editForm.numero_documento.trim() && { numero_documento: editForm.numero_documento.trim() }),
+      ...(editForm.password && { password: editForm.password }),
+      ...(editForm.tipo_sangre ? { tipo_sangre: editForm.tipo_sangre } : { tipo_sangre: null }),
+    };
+    try {
+      await updateUser.mutateAsync({ id: user?.id || authUser?.id, ...payload });
+      toast.success('Datos actualizados');
+      setEditOpen(false);
+    } catch (e) {
+      toast.error(getErr(e));
+    }
+  };
 
   useEffect(() => {
     if (!accessExpires) return;
@@ -259,14 +324,19 @@ export default function MiCarnet() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <Card>
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
-                <User className="h-5 w-5" />
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-sena-ink">Datos personales</h2>
+                  <p className="text-xs text-slate-400">Información registrada en tu perfil SENA</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-sena-ink">Datos personales</h2>
-                <p className="text-xs text-slate-400">Información registrada en tu perfil SENA</p>
-              </div>
+              <Button size="sm" variant="secondary" icon={Pencil} onClick={openEdit}>
+                Editar mis datos
+              </Button>
             </div>
             <div className="divide-y divide-slate-100">
               <DetailRow icon={User} label="Nombre completo" value={`${nombres} ${apellidos}`.trim()} />
@@ -407,6 +477,49 @@ export default function MiCarnet() {
           </Card>
         </div>
       </div>
+
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Editar mis datos"
+        description="Actualiza tu información personal. Tu rol no puede modificarse desde aquí."
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button icon={Pencil} onClick={onSaveEdit} loading={updateUser.isPending}>
+              Guardar cambios
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Nombres" value={editForm.nombres} onChange={(e) => setEditForm({ ...editForm, nombres: e.target.value })} />
+          <Input label="Apellidos" value={editForm.apellidos} onChange={(e) => setEditForm({ ...editForm, apellidos: e.target.value })} />
+          <Input label="Correo electrónico" type="email" icon={Mail} value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} error={editErrors.email} />
+          <Select
+            label="Tipo de documento"
+            options={TIPOS_DOC}
+            value={editForm.tipo_documento}
+            onChange={(e) => setEditForm({ ...editForm, tipo_documento: e.target.value })}
+            placeholder="Sin especificar"
+            allowEmpty
+          />
+          <Input label="Número de documento" value={editForm.numero_documento} onChange={(e) => setEditForm({ ...editForm, numero_documento: e.target.value })} />
+          <Select
+            label="Tipo de sangre"
+            options={TIPOS_SANGRE}
+            value={editForm.tipo_sangre}
+            onChange={(e) => setEditForm({ ...editForm, tipo_sangre: e.target.value })}
+            placeholder="Sin especificar"
+            allowEmpty
+            hint="Incluye el RH: por ejemplo O+ u O−"
+          />
+          <Input label="Nueva contraseña" type="password" icon={Lock} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} error={editErrors.password} hint="Opcional. Mínimo 6 caracteres." />
+        </div>
+      </Modal>
     </div>
   );
 }

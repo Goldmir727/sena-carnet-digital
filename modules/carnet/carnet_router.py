@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, status, Query, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
@@ -61,7 +61,10 @@ async def get_carnet(
     current_user: dict = Depends(get_current_user)
 ):
     service = CarnetService(db)
-    return await service.get_carnet_by_id(carnet_id)
+    carnet = await service.get_carnet_by_id(carnet_id)
+    if current_user["role_name"] not in ("Coordinador", "Validador") and carnet.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso denegado. No tienes autorización para consultar este carnet.")
+    return carnet
 
 
 @router.patch("/{carnet_id}/estado", response_model=CarnetResponse, status_code=status.HTTP_200_OK)
@@ -83,6 +86,8 @@ async def get_carnet_qr(
 ):
     service = CarnetService(db)
     carnet = await service.get_carnet_by_id(carnet_id)
+    if current_user["role_name"] not in ("Coordinador", "Validador") and carnet.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso denegado. No tienes autorización para consultar este carnet.")
     qr_buffer = generate_qr_image(carnet["codigo_qr"])
     return Response(content=qr_buffer.getvalue(), media_type="image/png")
 
@@ -95,6 +100,8 @@ async def download_carnet_pdf(
 ):
     service = CarnetService(db)
     carnet = await service.get_carnet_by_id(carnet_id)
+    if current_user["role_name"] not in ("Coordinador", "Validador") and carnet.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso denegado. No tienes autorización para descargar este carnet.")
     user = {
         "nombres": carnet.get("nombres"),
         "apellidos": carnet.get("apellidos"),

@@ -9,12 +9,11 @@ import {
   QrCode,
   FileBarChart2,
   ScanLine,
-  IdCard,
+  HelpCircle,
 } from 'lucide-react';
 
 export const MENU_ITEMS = [
   { to: '/', label: 'Inicio', icon: LayoutDashboard, permission: 'dashboard.view', end: true },
-  { to: '/mi-carnet', label: 'Mi carnet', icon: IdCard, permission: 'carnet.view' },
   { to: '/usuarios', label: 'Usuarios', icon: Users, permission: 'users.read' },
   { to: '/grupos', label: 'Grupos', icon: Network, permission: 'grupos.read' },
   { to: '/centros', label: 'Centros', icon: Building2, permission: 'centros.read' },
@@ -25,5 +24,6 @@ export const MENU_ITEMS = [
   { to: '/escanear-clase', label: 'Registrar asistencia', icon: ScanLine, permission: 'asistencia.escanear' },
   { to: '/reportes', label: 'Reportes', icon: FileBarChart2, permission: 'reports.view' },
   { to: '/validar', label: 'Validar acceso', icon: ScanLine, permission: 'validar.qr' },
+  { to: '/ayuda', label: 'Ayuda', icon: HelpCircle, permission: 'dashboard.view' },
 ];
 

@@ -218,6 +218,11 @@ async def read_user(
     Returns:
         UserResponse: Datos del usuario.
     """
+    if current_user["role_name"] != ADMIN_ROLE and current_user["id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permiso denegado. No tienes autorización para consultar este usuario.",
+        )
     service = UserService(db)
     return await service.get_user_by_id(user_id)
 
@@ -292,6 +297,11 @@ async def deactivate_user(
     Returns:
         dict: Usuario desactivado.
     """
+    if current_user["id"] == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permiso denegado. No puedes desactivar tu propia cuenta.",
+        )
     service = UserService(db)
     return await service.soft_delete_user(user_id)
 

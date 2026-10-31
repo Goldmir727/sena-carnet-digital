@@ -37,12 +37,15 @@ export default function Navbar() {
         >
           {user?.role_name}
         </span>
-        <div
-          title={user?.username}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-sena-green text-xs font-bold text-white shadow-glow"
+        <button
+          type="button"
+          onClick={() => navigate('/mi-carnet')}
+          title="Mi perfil y carnet"
+          aria-label="Ver mi perfil y carnet"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-sena-green text-xs font-bold text-white shadow-glow transition hover:ring-2 hover:ring-sena-green/40 focus-visible:ring-2 focus-visible:ring-sena-green/40 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           {user?.username?.slice(0, 2).toUpperCase()}
-        </div>
+        </button>
         <button
           onClick={handleLogout}
           title="Cerrar sesión"

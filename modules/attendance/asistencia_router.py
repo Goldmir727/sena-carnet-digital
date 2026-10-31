@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
-from core.security import get_aprendiz_user, get_current_user, get_docente_user
+from core.security import get_aprendiz_user, get_current_user
 from modules.attendance.asistencia_service import AsistenciaService
+from modules.attendance.attendance_service import AttendanceService
 
 
 class EscanearQRRequest(BaseModel):
@@ -32,8 +33,10 @@ async def asistencia_por_grupo(
     current_user: dict = Depends(get_current_user),
 ):
     if current_user["role_name"] not in ("Docente", "Coordinador"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Solo Docente o Coordinador.")
+    if current_user["role_name"] == "Docente":
+        if not await AttendanceService(db).ficha_permitida(grupo_id, current_user["id"]):
+            raise HTTPException(status_code=403, detail="Ficha no asignada a tu cuenta.")
     service = AsistenciaService(db)
     return await service.por_grupo(grupo_id, fecha)
 
@@ -45,8 +48,10 @@ async def asistencia_stats(
     current_user: dict = Depends(get_current_user),
 ):
     if current_user["role_name"] not in ("Docente", "Coordinador"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Solo Docente o Coordinador.")
+    if current_user["role_name"] == "Docente":
+        if not await AttendanceService(db).ficha_permitida(grupo_id, current_user["id"]):
+            raise HTTPException(status_code=403, detail="Ficha no asignada a tu cuenta.")
     service = AsistenciaService(db)
     return await service.stats(grupo_id)
 
@@ -56,14 +61,17 @@ async def importar_excel(
     grupo_id: int = Query(..., gt=0),
     archivo: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_docente_user),
+    current_user: dict = Depends(get_current_user),
 ):
+    if current_user["role_name"] not in ("Docente", "Coordinador"):
+        raise HTTPException(status_code=403, detail="Solo Docente o Coordinador.")
+    if current_user["role_name"] == "Docente":
+        if not await AttendanceService(db).ficha_permitida(grupo_id, current_user["id"]):
+            raise HTTPException(status_code=403, detail="Ficha no asignada a tu cuenta.")
     if not archivo.filename.lower().endswith(".xlsx"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Solo se acepta .xlsx")
     contenido = await archivo.read()
     if len(contenido) > 5 * 1024 * 1024:
-        from fastapi import HTTPException
         raise HTTPException(status_code=413, detail="Archivo muy grande (máx 5MB).")
     service = AsistenciaService(db)
     return await service.importar_excel(grupo_id, contenido)
