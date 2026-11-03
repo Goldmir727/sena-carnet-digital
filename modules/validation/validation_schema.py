@@ -20,3 +20,13 @@ class AccessLogResponse(BaseModel):
     resultado: str
     mensaje: str
     timestamp: datetime
+
+
+class AccessHistoryResponse(BaseModel):
+    id: int
+    user_id: int
+    movement: str
+    day: str
+    time: str
+    center: str
+    timestamp: datetime

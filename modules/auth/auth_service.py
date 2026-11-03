@@ -39,7 +39,7 @@ class AuthService:
                  SELECT id, email, document, password_hash, user_status, role_id,
                      name, last_name
                  FROM users
-                 WHERE email = :username OR document = :username;
+                 WHERE LOWER(email) = LOWER(:username) OR document = :username;
         """)
         result = await self.db.execute(query, {"username": username_in})
         user = result.mappings().first()

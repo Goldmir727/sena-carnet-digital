@@ -1,11 +1,25 @@
 from fastapi import APIRouter, Depends, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
-from core.security import get_validator_user
-from modules.validation.validation_schema import ValidateQRRequest, ValidationResponse
+from core.security import get_current_user, get_validator_user
+from modules.validation.validation_schema import (
+    AccessHistoryResponse,
+    ValidateQRRequest,
+    ValidationResponse,
+)
 from modules.validation.validation_service import ValidationService
 
 router = APIRouter(prefix="/validate", tags=["Validación QR"])
+
+
+@router.get("/access-history/me", response_model=list[AccessHistoryResponse])
+async def access_history(
+    limit: int = 30,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    service = ValidationService(db)
+    return await service.access_history(current_user["id"], min(max(limit, 1), 100))
 
 
 @router.post("/qr", response_model=ValidationResponse, status_code=status.HTTP_200_OK)

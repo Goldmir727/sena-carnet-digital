@@ -21,6 +21,7 @@ from modules.centros.centro_router import router as centro_router
 from modules.sesiones.sesion_router import router as sesion_router
 from modules.programas.programa_router import router as programa_router
 from modules.regionales.regional_router import router as regional_router
+from modules.eventos.evento_router import router as eventos_router
 from core.logger import logger
 
 
@@ -143,6 +144,7 @@ app.include_router(centro_router)
 app.include_router(sesion_router)
 app.include_router(programa_router)
 app.include_router(regional_router)
+app.include_router(eventos_router)
 
 from core.config import settings
 

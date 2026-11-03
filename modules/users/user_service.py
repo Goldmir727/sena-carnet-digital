@@ -43,8 +43,11 @@ def _centro_cols(alias: str) -> str:
                 ORDER BY m.id DESC LIMIT 1) AS centro_id"""
 
 
-async def _invalidate_user_caches() -> None:
-    await cache_delete("reports:*")
+async def _invalidate_user_caches(user_id: int | None = None) -> None:
+    keys = ["reports:*"]
+    if user_id is not None:
+        keys.append(f"carnets:user:{user_id}")
+    await cache_delete(*keys)
 
 # ============================
 # SERVICIO DE USUARIOS
@@ -195,7 +198,7 @@ class UserService:
         query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
-                     blood_type AS tipo_sangre,
+                     blood_type AS tipo_sangre, sex AS sexo,
                      photo_profile AS foto_perfil,
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
                      {centro}
@@ -222,7 +225,7 @@ class UserService:
         query = text(f"""
                  SELECT id, email AS username, email, name AS nombres, last_name AS apellidos,
                      document_type AS tipo_documento, document AS numero_documento,
-                     blood_type AS tipo_sangre,
+                     blood_type AS tipo_sangre, sex AS sexo,
                      photo_profile AS foto_perfil,
                      (user_status IN ('ACTIVE', 'ACTIVO')) AS is_active, role_id,
                      {centro}
@@ -449,6 +452,23 @@ class UserService:
                 detail="El usuario a modificar no existe.",
             )
 
+        if current_user["id"] == target_user_id:
+            immutable_fields = (
+                "email",
+                "nombres",
+                "apellidos",
+                "tipo_documento",
+                "numero_documento",
+            )
+            if any(getattr(user_update, field, None) is not None for field in immutable_fields):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "No puedes modificar tu nombre, correo institucional "
+                        "ni datos del documento desde tu perfil."
+                    ),
+                )
+
         update_fields = []
         params = {"id": target_user_id}
 
@@ -457,6 +477,7 @@ class UserService:
             "email": "email",
             "nombres": "name",
             "apellidos": "last_name",
+            "sexo": "sex",
             "tipo_documento": "document_type",
             "numero_documento": "document",
             "tipo_sangre": "blood_type",
@@ -515,7 +536,7 @@ class UserService:
 
         try:
             await self.db.execute(text(query_str), params)
-            await self.db.commit(); await _invalidate_user_caches()
+            await self.db.commit(); await _invalidate_user_caches(target_user_id)
             # Releer con la forma completa (incluye tipo_sangre y centro).
             return await self.get_user_by_id(target_user_id)
         except HTTPException:

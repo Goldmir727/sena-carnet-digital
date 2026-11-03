@@ -16,18 +16,33 @@ class AsistenciaService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def escanear(self, user_id: int, qr_token: str) -> dict:
+    async def escanear(
+        self, user_id: int, qr_token: str, role_name: str | None = None
+    ) -> dict:
         payload = decode_qr_payload(qr_token)
-        if not payload or payload.get("type") != "clase":
+        if not payload:
             raise HTTPException(status_code=400, detail="QR inválido o corrupto.")
 
+        if payload.get("type") == "evento":
+            return await self._escanear_evento(user_id, qr_token, payload)
+
+        if payload.get("type") != "clase":
+            raise HTTPException(status_code=400, detail="QR inválido o corrupto.")
+        if role_name is not None and role_name != "Aprendiz":
+            raise HTTPException(
+                status_code=403,
+                detail="Solo los aprendices pueden registrar asistencia de clase.",
+            )
+
         ses = await self.db.execute(
-            text("SELECT id, ficha_id, instructor_id, qr_expires_at FROM sesiones WHERE qr_token = :t;"),
+            text("SELECT id, ficha_id, instructor_id, qr_expires_at, status FROM sesiones WHERE qr_token = :t;"),
             {"t": qr_token},
         )
         s = ses.mappings().first()
         if not s:
             raise HTTPException(status_code=404, detail="Sesión QR no encontrada.")
+        if s["status"] != "en_curso":
+            raise HTTPException(status_code=400, detail="La sesión de asistencia está cerrada.")
         exp = s["qr_expires_at"]
         if exp is not None:
             if exp.tzinfo is None:
@@ -77,6 +92,78 @@ class AsistenciaService:
             await self.db.rollback()
             logger.exception("Error al registrar asistencia.")
             raise HTTPException(status_code=500, detail="Error al registrar asistencia.")
+
+    async def _escanear_evento(
+        self, user_id: int, qr_token: str, payload: dict
+    ) -> dict:
+        event_id = payload.get("evento_id")
+        if not isinstance(event_id, int) or event_id <= 0:
+            raise HTTPException(status_code=400, detail="QR de evento inválido.")
+
+        result = await self.db.execute(
+            text("""
+                SELECT id, name, status, qr_expires_at
+                FROM eventos
+                WHERE id = :id AND qr_token = :token
+                FOR UPDATE;
+            """),
+            {"id": event_id, "token": qr_token},
+        )
+        event = result.mappings().first()
+        if event is None:
+            raise HTTPException(status_code=404, detail="Evento QR no encontrado.")
+        if event["status"] != "activo":
+            raise HTTPException(status_code=400, detail="La asistencia del evento está cerrada.")
+
+        expires_at = event["qr_expires_at"]
+        now = datetime.now(timezone.utc)
+        if expires_at is None:
+            raise HTTPException(status_code=400, detail="El QR del evento no tiene vencimiento válido.")
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now > expires_at:
+            await self.db.execute(
+                text("UPDATE eventos SET status = 'expirado' WHERE id = :id;"),
+                {"id": event_id},
+            )
+            await self.db.commit()
+            raise HTTPException(status_code=400, detail="El QR del evento expiró.")
+
+        duplicate = await self.db.execute(
+            text("""
+                SELECT 1 FROM asistencias
+                WHERE event_id = :event_id AND user_id = :user_id
+                LIMIT 1;
+            """),
+            {"event_id": event_id, "user_id": user_id},
+        )
+        if duplicate.first():
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Ya registraste tu asistencia para este evento.",
+            )
+
+        result = await self.db.execute(
+            text("""
+                INSERT INTO asistencias (user_id, event_id, status, time)
+                VALUES (:user_id, :event_id, 'presente', :time)
+                RETURNING id, user_id, event_id, time;
+            """),
+            {"user_id": user_id, "event_id": event_id, "time": now},
+        )
+        attendance = result.mappings().first()
+
+        await self.db.commit()
+        await cache_delete("reports:*")
+        logger.info(f"Asistencia registrada user={user_id} evento={event_id}")
+        return {
+            "id": attendance["id"],
+            "user_id": attendance["user_id"],
+            "event_id": attendance["event_id"],
+            "evento": event["name"],
+            "fecha_hora": attendance["time"],
+        }
 
     async def por_grupo(self, grupo_id: int, fecha: str | None = None) -> list[dict]:
         if fecha:

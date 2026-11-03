@@ -19,6 +19,69 @@ class ValidationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
+    async def access_history(self, user_id: int, limit: int = 30) -> list[dict]:
+        center_join = """
+            LEFT JOIN LATERAL (
+                SELECT cf.nombre
+                FROM matriculas m
+                JOIN fichas f ON f.id = m.ficha_id
+                JOIN centros_formacion cf ON cf.id = f.centro_id
+                WHERE m.user_id = :user_id AND m.status = 'activa'
+                ORDER BY m.registration_date DESC
+                LIMIT 1
+            ) center_data ON TRUE
+        """
+        try:
+            result = await self.db.execute(
+                text(f"""
+                    SELECT l.id, l.user_id, l.timestamp, l.resultado,
+                           l.ubicacion, center_data.nombre AS center
+                    FROM access_logs l
+                    {center_join}
+                                        WHERE l.user_id = :user_id
+                                            AND (l.resultado = 'PERMITIDO' OR l.resultado = 'SALIDA')
+                    ORDER BY l.timestamp DESC
+                    LIMIT :limit;
+                """),
+                {"user_id": user_id, "limit": limit},
+            )
+            rows = [dict(row) for row in result.mappings().all()]
+        except Exception:
+            await self.db.rollback()
+            result = await self.db.execute(
+                text(f"""
+                    SELECT l.id, l.user_id, l.created_at AS timestamp,
+                           l.accion AS resultado, l.detalles,
+                           center_data.nombre AS center
+                    FROM audit_logs l
+                    {center_join}
+                    WHERE l.user_id = :user_id
+                                            AND l.accion IN ('validacion_qr_PERMITIDO', 'validacion_qr_SALIDA')
+                    ORDER BY l.created_at DESC
+                    LIMIT :limit;
+                """),
+                {"user_id": user_id, "limit": limit},
+            )
+            rows = [dict(row) for row in result.mappings().all()]
+
+        history = []
+        for row in rows:
+            timestamp = row["timestamp"]
+            location = row.get("ubicacion")
+            if not location and row.get("detalles"):
+                details = row["detalles"]
+                location = details.rsplit("ubicacion=", 1)[-1].strip() if "ubicacion=" in details else None
+            history.append({
+                "id": row["id"],
+                "user_id": row["user_id"],
+                "movement": "Salida" if "SALIDA" in row["resultado"].upper() else "Entrada",
+                "day": timestamp.strftime("%Y-%m-%d"),
+                "time": timestamp.strftime("%H:%M"),
+                "center": location if location and location.lower() != "none" else row["center"] or "Centro SENA",
+                "timestamp": timestamp,
+            })
+        return history
+
     async def _log(self, user_id: int | None, resultado: str, mensaje: str, ubicacion: str | None) -> None:
         now = datetime.now(timezone.utc)
         try:

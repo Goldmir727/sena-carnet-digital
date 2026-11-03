@@ -28,6 +28,28 @@ class QRService:
                 detail="Los validadores no pueden generar QR de carnet."
             )
 
+        carnet_result = await self.db.execute(
+            text("""
+                SELECT id, expiration_date
+                FROM carnets
+                WHERE user_id = :uid
+                ORDER BY id DESC
+                LIMIT 1;
+            """),
+            {"uid": user_id},
+        )
+        carnet = carnet_result.mappings().first()
+        if carnet is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No tienes un carnet asignado.",
+            )
+        if carnet["expiration_date"] < date.today():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu carnet está vencido.",
+            )
+
         # base.sql no tiene qr_carnets: token stateless HMAC (timestamp+15min).
         # Se intenta persistir si la tabla existe (entornos con migración 003), si no se ignora.
         try:
@@ -97,18 +119,21 @@ class QRService:
         start_t = now.time().replace(microsecond=0)
         end_dt = now + timedelta(minutes=settings.QR_CLASE_EXPIRE_MINUTES)
         end_t = end_dt.time().replace(microsecond=0)
-        await self.db.execute(
+        session = await self.db.execute(
             text("""
                 INSERT INTO sesiones (ficha_id, instructor_id, session_date, start_time, end_time, status, qr_token, qr_expires_at)
-                VALUES (:f, :d, :sd, :st, :et, 'en_curso', :tok, :exp);
+                VALUES (:f, :d, :sd, :st, :et, 'en_curso', :tok, :exp)
+                RETURNING id;
             """),
             {"f": grupo_id, "d": docente_id, "sd": hoy, "st": start_t, "et": end_t, "tok": token, "exp": expires_at},
         )
+        session_id = session.mappings().first()["id"]
         await self.db.commit()
 
         docente_nombre = f"{docente_row['name']} {docente_row['last_name']}" if docente_row else ""
 
         return {
+            "sesion_id": session_id,
             "qr_token": token,
             "expires_at": expires_at.isoformat(),
             "grupo": ficha_row["number"],

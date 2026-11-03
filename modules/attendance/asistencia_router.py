@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
-from core.security import get_aprendiz_user, get_current_user
+from core.security import get_current_user
 from modules.attendance.asistencia_service import AsistenciaService
 from modules.attendance.attendance_service import AttendanceService
 
@@ -19,10 +19,12 @@ router = APIRouter(prefix="/asistencia", tags=["Asistencia QR"])
 async def escanear_qr(
     body: EscanearQRRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_aprendiz_user),
+    current_user: dict = Depends(get_current_user),
 ):
     service = AsistenciaService(db)
-    return await service.escanear(current_user["id"], body.qr_token)
+    return await service.escanear(
+        current_user["id"], body.qr_token, current_user["role_name"]
+    )
 
 
 @router.get("/grupo/{grupo_id}", status_code=status.HTTP_200_OK)

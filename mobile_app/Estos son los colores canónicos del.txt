@@ -1,0 +1,36 @@
+Estos son los colores canónicos del sistema, definidos en `frontend/src/index.css` (`@theme`, Tailwind v4). Todo el frontend consume estos tokens; nada usa hex directos salvo el PDF del carnet (que replica los mismos valores en JS/Python).
+
+## Paleta institucional SENA
+
+| Token | Hex | Dónde se usa |
+|---|---|---|
+| `sena-green` | `#0F7A4D` | Botón primario (`Button.jsx`), iconos/contenedores de tarjetas (`Card.jsx`, `StatCard.jsx`), hover de tablas/cards, scrollbar, `focus-visible`, dock de navegación, encabezado del PDF del carnet |
+| `sena-green-dark` | `#0A5A39` | Hover del botón primario, botón `success`, header `Card accent`, dock (`bg-sena-dock`), panel lateral del login, franja superior del PDF del carnet |
+| `sena-green-light` | `#E8F5EE` | Brillos decorativos de fondo (login, StatCard), iconos del dock |
+| `sena-yellow` | `#F2B43A` | Acento secundario: `Badge yellow`, `StatCard yellow`, punto activo del dock, iconos sobre verde oscuro, línea divisoria del PDF del carnet |
+| `sena-bg` | `#F8FAFC` | Fondo de las pantallas de autenticación (`AuthLayout.jsx`: login, recuperar contraseña) |
+| `sena-ink` | `#17212B` | Color base del texto en `body`, títulos de modales (`Modal.jsx`), botones secundarios/ghost, texto del PDF del carnet; al 50% como overlay que oscurece el fondo detrás de los modales |
+| `sena-tint-50` | `#F1FAF6` | Fondo de `Card tint`, cajas de ayuda (ej. modal Importar Excel), filas seleccionables |
+| `sena-tint-100` | `#E4F3EC` | Fondos suaves: iconos en cards/tablas, `Badge green`, botón ghost hover, anillo de avatares/fotos |
+| `sena-tint-200` | `#CDE8DA` | Bordes de elementos verdes, texto secundario sobre fondos oscuros, selección de texto |
+| `sena-tint-300` | `#9FD6BA` | Reservado para estados intermedios/hover (uso puntual) |
+| `sena-tint-400` | `#5DB890` | Scrollbar fina (`scrollbar-thin`) |
+| `canvas` | `#F3F6F4` | Fondo general de la app (`body`, detrás de todas las vistas) |
+| `surface` | `#FFFFFF` | Fondo de cards, tablas, modales e inputs |
+| `surface-muted` | `#F7F9F8` | Superficies rebajadas menores |
+| `ink-soft` | `#44525F` | Texto suave secundario |
+| `sena-glow` | `rgba(15,122,77,0.18)` | Sombra luminosa del botón primario y cards destacadas |
+
+## Colores de apoyo (Tailwind base, no institucionales)
+
+- **Grises `slate`** (`slate-50` a `slate-600`): bordes de cards/tablas/inputs, texto secundario y descripciones, `Badge slate`, fondo de filas y botones secundarios (`hover:bg-slate-50`).
+- **Rojo** (`red-50/600/700`): errores, `Badge red`, botón `danger` (eliminar/desactivar), validaciones de formularios.
+- **Azul** (`blue-50/600/700`): `Badge blue` y `StatCard blue` (conteos informativos, ej. cuentas activas).
+- **Blanco con opacidad** (`white/10`, `white/15`, `bg-white/95`): iconos y overlays sobre fondos verdes oscuros, modal con `backdrop-blur`.
+
+## Por pieza de interfaz
+
+- **Botones** (`Button.jsx`): primario verde, secundario blanco/borde slate, outline verde, ghost transparente, danger rojo, success verde oscuro.
+- **Modales** (`Modal.jsx`): panel blanco, overlay `sena-ink/50` con blur, título `sena-ink`, descripción slate.
+- **Fondos**: app `canvas`, auth `sena-bg`, login con panel `bg-sena-hero` (degradado verde) + destellos `green-light`/`yellow`.
+- **Carnet PDF** (`carnetMedia.js`, `pdf_service.py`): replica los tokens — verde `#0F7A4D`, verde oscuro `#0A5A39`, amarillo `#F2B43A`, tinta `#17212B`, gris `#8A99A6`.

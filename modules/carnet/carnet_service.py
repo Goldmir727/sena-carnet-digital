@@ -109,6 +109,20 @@ class CarnetService:
                      u.document AS numero_documento, u.document_type AS tipo_documento,
                      u.blood_type AS tipo_sangre,
                      {CENTRO_SQL},
+                     (SELECT f.number FROM matriculas m
+                         JOIN fichas f ON f.id = m.ficha_id
+                         WHERE m.user_id = c.user_id AND m.status = 'activa'
+                         ORDER BY m.id DESC LIMIT 1) AS ficha_numero,
+                     (SELECT p.name FROM matriculas m
+                         JOIN fichas f ON f.id = m.ficha_id
+                         LEFT JOIN programa_formacion p ON p.id = f.programa_id
+                         WHERE m.user_id = c.user_id AND m.status = 'activa'
+                         ORDER BY m.id DESC LIMIT 1) AS programa_nombre,
+                     (SELECT cf.regional FROM matriculas m
+                         JOIN fichas f ON f.id = m.ficha_id
+                         JOIN centros_formacion cf ON cf.id = f.centro_id
+                         WHERE m.user_id = c.user_id AND m.status = 'activa'
+                         ORDER BY m.id DESC LIMIT 1) AS regional,
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
                      u.email AS usuario_email

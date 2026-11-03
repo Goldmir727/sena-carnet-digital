@@ -6,6 +6,10 @@ load_dotenv()
 
 class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "2"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "0"))
+    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+    DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
     # CRÍTICO en producción: debe venir de variable de entorno real.
     # No se usa valor por defecto útil; el entorno debe configurarlo.
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")

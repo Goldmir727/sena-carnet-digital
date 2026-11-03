@@ -20,7 +20,16 @@ def _build_engine():
         connect_args["ssl"] = sslmode[0]
 
     clean_url = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
-    return create_async_engine(clean_url, echo=False, pool_pre_ping=True, connect_args=connect_args)
+    return create_async_engine(
+        clean_url,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_timeout=settings.DB_POOL_TIMEOUT,
+        pool_recycle=settings.DB_POOL_RECYCLE,
+        connect_args=connect_args,
+    )
 
 
 engine = _build_engine()

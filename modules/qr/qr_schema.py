@@ -12,6 +12,7 @@ class QRClaseRequest(BaseModel):
 
 
 class QRClaseResponse(BaseModel):
+    sesion_id: int
     qr_token: str
     expires_at: str
     grupo: str

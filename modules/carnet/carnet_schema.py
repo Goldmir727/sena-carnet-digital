@@ -26,3 +26,6 @@ class CarnetDetailResponse(CarnetResponse):
     tipo_sangre: Optional[str] = None
     centro_id: Optional[int] = None
     centro_nombre: Optional[str] = None
+    regional: Optional[str] = None
+    ficha_numero: Optional[str] = None
+    programa_nombre: Optional[str] = None

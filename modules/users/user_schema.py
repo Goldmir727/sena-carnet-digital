@@ -62,6 +62,12 @@ class UserBase(BaseModel):
         max_length=100,
         description="Apellidos del usuario."
     )
+
+    sexo: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Sexo del usuario."
+    )
     
     tipo_documento: Optional[str] = Field(
         None,
@@ -138,6 +144,12 @@ class UserUpdate(BaseModel):
         None,
         max_length=100,
         description="Apellidos del usuario."
+    )
+
+    sexo: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Sexo del usuario."
     )
     
     tipo_documento: Optional[str] = Field(

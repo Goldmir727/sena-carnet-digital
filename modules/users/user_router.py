@@ -74,7 +74,7 @@ async def search_users(
     q: Annotated[str, Query(description="Texto utilizado para buscar usuarios.")],
     estado: Annotated[str, Query(description="activos | suspendidos | todos")] = "activos",
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_admin_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Busca usuarios por nombre, correo o documento respetando el estado.
@@ -201,6 +201,15 @@ async def import_users_excel(
             extra = await service.asignar_importados_a_fichas(resultado.get("detalle", []))
             resultado.update(extra)
     return resultado
+
+
+@router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def read_current_user(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    service = UserService(db)
+    return await service.get_user_by_id(current_user["id"])
 
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -371,7 +380,7 @@ async def upload_foto(
     return await service.update_foto(user_id, filepath)
 
 
-@router.get("{user_id}/foto", status_code=status.HTTP_200_OK)
+@router.get("/{user_id}/foto", status_code=status.HTTP_200_OK)
 async def get_foto(
     user_id: Annotated[int, Path(description="ID del usuario.")],
     db: AsyncSession = Depends(get_db),
@@ -402,7 +411,7 @@ async def get_foto(
     foto_file = foto_files[0]
     return FileResponse(path=foto_file, media_type="image/*")
 
-@router.delete("{user_id}/foto", status_code=status.HTTP_200_OK)
+@router.delete("/{user_id}/foto", status_code=status.HTTP_200_OK)
 async def delete_foto(
     user_id: Annotated[int, Path(description="ID del usuario.")],
     db: AsyncSession = Depends(get_db),
