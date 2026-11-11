@@ -1,0 +1,21 @@
+# Contexto de build de la API: no copiar secretos ni artefactos locales.
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.env
+.env.*
+!.env.example
+uploads
+base.sql
+frontend
+mobile_app
+tests
+*.xlsx
+prueba_*.xlsx
+MANUAL_TECNICO.md
+SECURITY_AUDIT_P0P1P2.md
+README.md

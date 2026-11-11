@@ -1,0 +1,123 @@
+# Stack para desplegar en un VPS con Coolify.
+#
+# Arquitectura:
+#   web (Nginx) -> sirve la SPA y proxya /api/ -> api:8000
+#   api (FastAPI) -> db:5432 y redis:6379
+#
+# Coolify asigna el dominio al servicio `web` (puerto interno 80).
+# No se publican puertos con `ports:` para no chocar con el proxy de Coolify.
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-carnets}
+      POSTGRES_USER: ${POSTGRES_USER:-carnets}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    # PostgreSQL 18+ usa /var/lib/postgresql como punto de montaje y crea
+    # el directorio versionado dentro. Montar .../data rompe el arranque.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?}
+      - --appendonly
+      - "yes"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?}
+      SECRET_KEY: ${SECRET_KEY:?}
+      QR_SECRET: ${QR_SECRET:?}
+      REDIS_URL: ${REDIS_URL:?}
+
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-1}
+      RESET_TOKEN_EXPIRE_MINUTES: ${RESET_TOKEN_EXPIRE_MINUTES:-10}
+      MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS:-5}
+      BLOCK_DURATION_MINUTES: ${BLOCK_DURATION_MINUTES:-15}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-20}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      VERIFICATION_CODE_EXPIRE_MINUTES: ${VERIFICATION_CODE_EXPIRE_MINUTES:-5}
+      TWO_FA_MAX_ATTEMPTS: ${TWO_FA_MAX_ATTEMPTS:-5}
+      QR_CARNET_EXPIRE_MINUTES: ${QR_CARNET_EXPIRE_MINUTES:-15}
+      QR_CLASE_EXPIRE_MINUTES: ${QR_CLASE_EXPIRE_MINUTES:-15}
+      CARNET_DURATION_DAYS: ${CARNET_DURATION_DAYS:-365}
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads/fotos}
+
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@sena.edu.co}
+
+      # Nginx está delante de la API; confiar en sus cabeceras X-Forwarded-*.
+      FORWARDED_ALLOW_IPS: "*"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
