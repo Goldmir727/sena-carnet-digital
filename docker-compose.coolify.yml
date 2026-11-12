@@ -107,6 +107,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # Coolify inyecta las etiquetas de Traefik al crear el contenedor. Si el
+    # dominio se asigna después del despliegue, hay que redesplegar para que
+    # `web` reciba `traefik.http.routers.*`; un simple Restart no basta.
+    networks:
+      - default
+      - coolify
     expose:
       - "80"
     healthcheck:
@@ -120,3 +126,9 @@ volumes:
   pgdata:
   redisdata:
   uploads:
+
+networks:
+  # Red externa que crea Coolify y donde vive Traefik (coolify-proxy).
+  # Permite que el proxy alcance `web` aunque cambie la red del stack.
+  coolify:
+    external: true
