@@ -149,14 +149,21 @@ detecta las variables declaradas con `${...}` en el Compose; las que usan
 | `POSTGRES_USER` | `carnets` |
 | `POSTGRES_PASSWORD` | Secreto largo, solo letras y números. |
 | `DATABASE_URL` | `postgresql+asyncpg://carnets:TU_PASSWORD@db:5432/carnets` |
-| `REDIS_PASSWORD` | Otro secreto largo. |
-| `REDIS_URL` | `redis://:TU_PASSWORD_REDIS@redis:6379/0` |
+| `REDIS_URL` | `redis://redis:6379/0` (sin contraseña; ver nota abajo) |
 | `SECRET_KEY` | Secreto largo y aleatorio. |
 | `QR_SECRET` | **Distinto** de `SECRET_KEY`. |
 
 `DATABASE_URL` debe usar exactamente el mismo usuario, contraseña y base que
 `POSTGRES_*`. Usa una contraseña alfanumérica para no tener que codificar
 caracteres especiales en la URL.
+
+Redis se despliega **sin contraseña**: el Compose ya no declara
+`REDIS_PASSWORD` ni arranca con `--requirepass`. No hay ninguna credencial de
+Redis que recuperar del proyecto; el valor de `REDIS_URL` es simplemente
+`redis://redis:6379/0`. Esto es aceptable porque el contenedor no publica
+puertos y solo es alcanzable desde la red interna del stack. Si en el futuro
+agregas otros servicios a esa red, vuelve a activar `--requirepass` en
+`docker-compose.coolify.yml` y usa `redis://:TU_PASSWORD@redis:6379/0`.
 
 Genera secretos con:
 
@@ -195,8 +202,7 @@ POSTGRES_DB=carnets
 POSTGRES_USER=carnets
 POSTGRES_PASSWORD=CAMBIA_ESTE_SECRETO
 DATABASE_URL=postgresql+asyncpg://carnets:CAMBIA_ESTE_SECRETO@db:5432/carnets
-REDIS_PASSWORD=CAMBIA_ESTE_OTRO_SECRETO
-REDIS_URL=redis://:CAMBIA_ESTE_OTRO_SECRETO@redis:6379/0
+REDIS_URL=redis://redis:6379/0
 SECRET_KEY=CAMBIA_POR_UN_SECRETO_LARGO
 QR_SECRET=CAMBIA_POR_OTRO_SECRETO_DISTINTO
 VITE_API_URL=/api
@@ -233,7 +239,8 @@ Si `api` no arranca, revisa **Runtime Logs**. Las causas más comunes son:
 
 - Falta `DATABASE_URL`, `SECRET_KEY` o `QR_SECRET`.
 - `DATABASE_URL` no coincide con `POSTGRES_*`.
-- `REDIS_URL` tiene el formato incorrecto.
+- `REDIS_URL` tiene el formato incorrecto o conserva una contraseña que Redis
+  ya no usa (debe ser `redis://redis:6379/0`).
 - La base no tiene esquema (ver sección 9).
 
 ## 9. Inicializar la base de datos
