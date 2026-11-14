@@ -74,7 +74,11 @@ class StripApiPrefixMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] in ("http", "websocket"):
             path = scope.get("path", "")
-            if path == "/api" or path.startswith("/api/"):
+            # El JSON de OpenAPI se registra con prefijo /api para que Swagger
+            # UI lo pida en el mismo origen público; no debe recortarse.
+            if (
+                path == "/api" or path.startswith("/api/")
+            ) and path != "/api/openapi.json":
                 new_path = path[4:] or "/"
                 scope = dict(scope)
                 scope["path"] = new_path
@@ -87,6 +91,8 @@ app = FastAPI(
     version="4.0.0",
     description="API modular para emisión, validación y trazabilidad de carnets institucionales",
     lifespan=lifespan,
+    openapi_url="/api/openapi.json",
+    servers=[{"url": "/api"}],
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
@@ -105,6 +111,12 @@ allow_origins=[
 )
 
 app.add_middleware(StripApiPrefixMiddleware)
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_root_fallback():
+    """Compatibilidad si un proxy recorta el prefijo /api antes de la app."""
+    return app.openapi()
 
 
 @app.get("/health", tags=["Sistema"])
