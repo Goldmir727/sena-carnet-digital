@@ -77,10 +77,13 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@sena.edu.co}
 
-      # Nginx está delante de la API; confiar en sus cabeceras X-Forwarded-*.
+      # Traefik (o Nginx) está delante de la API; confiar en X-Forwarded-*.
       FORWARDED_ALLOW_IPS: "*"
     volumes:
       - uploads:/app/uploads
+    # Puerto interno para el dominio api.carnetisena.com en Coolify.
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -102,7 +105,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-https://api.carnetisena.com}
     restart: unless-stopped
     depends_on:
       api:

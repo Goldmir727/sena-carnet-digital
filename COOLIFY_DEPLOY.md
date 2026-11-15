@@ -423,3 +423,61 @@ En este entorno se comprobó:
 
 No se pudo probar contra un VPS real ni contra el dominio de producción porque
 este entorno no tiene acceso a Hostinger, Coolify ni al DNS.
+
+## 14. Dominio dedicado para la API (`api.carnetisena.com`)
+
+Variante con dos dominios: el frontend en su propio dominio y la API en un
+subdominio independiente, sin el prefijo `/api`.
+
+```text
+https://carnetisena.com      -> web:80   (SPA React)
+https://api.carnetisena.com  -> api:8000 (FastAPI)
+```
+
+### DNS
+
+En el registrador del dominio crea:
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| `A` | `api` | `93.127.217.129` |
+| `A` | `@` (o `www`) | IP del frontend (VPS o Vercel) |
+
+### Coolify
+
+1. En el recurso del stack, **Domains**:
+   - `https://api.carnetisena.com` → servicio `api`, puerto interno `8000`.
+   - `https://carnetisena.com` → servicio `web`, puerto interno `80` (solo si
+     el frontend se sirve desde el VPS; si está en Vercel, no agregues este
+     dominio al stack).
+2. Deploy y espera el certificado de `api.carnetisena.com`.
+
+### Código
+
+- Frontend: `VITE_API_URL=https://api.carnetisena.com` (build de Vite). El
+  valor por defecto en `frontend/src/api/base.js` y `frontend/Dockerfile` ya
+  apunta ahí.
+- Flutter: `AppConstants._prodApiBaseUrl` usa
+  `https://api.carnetisena.com` en builds release. En debug se sigue usando
+  `10.0.2.2:8000` (emulador) o `localhost:8000`.
+- CORS: `main.py` permite `https://carnetisena.com`,
+  `https://www.carnetisena.com` y cualquier subdominio de `carnetisena.com`.
+  Si el frontend vive en otro dominio (por ejemplo Vercel), agrégalo a
+  `allow_origins` o a `allow_origin_regex`.
+
+### Verificación
+
+```bash
+curl https://api.carnetisena.com/health
+curl -I https://api.carnetisena.com/docs
+curl -X POST https://api.carnetisena.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin@tudominio.com","password":"..."}'
+```
+
+`/docs` y `/health` deben responder `200`. El login debe devolver `401` para
+credenciales incorrectas y el flujo 2FA para las correctas.
+
+El proxy `/api/` de `frontend/nginx.conf` se conserva como compatibilidad para
+el esquema de un solo dominio, pero con el subdominio dedicado el frontend ya
+no lo usa.

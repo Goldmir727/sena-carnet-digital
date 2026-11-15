@@ -100,12 +100,19 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
 allow_origins=[
+        "https://carnetisena.com",
+        "https://www.carnetisena.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    # Permite el dominio principal y cualquier subdominio de carnetisena.com
+    # (incluido el frontend en Vercel si usa un dominio propio).
+    allow_origin_regex=(
+        r"https://([a-z0-9-]+\.)?carnetisena\.com"
+        r"|http://(localhost|127\.0\.0\.1):\d+"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
