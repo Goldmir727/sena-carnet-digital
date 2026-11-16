@@ -7,11 +7,13 @@ class AppConstants {
     'API_BASE_URL',
   );
 
-  static const String _prodApiBaseUrl =
-      'https://3pvyvleulkjypce5tlhuytxn.93.127.217.129.sslip.io/api';
+  // API pública en el VPS. Sin barra final y sin /api: el backend sirve sus
+  // rutas en la raíz del subdominio (ej. /auth/login).
+  static const String _prodApiBaseUrl = 'https://api.carnetisena.com';
 
   static String get apiBaseUrl {
     if (_configuredApiBaseUrl.isNotEmpty) return _configuredApiBaseUrl;
+    if (kReleaseMode) return _prodApiBaseUrl;
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return _prodApiBaseUrl;
     }

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.database import get_db
@@ -99,18 +100,40 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
 allow_origins=[
+        "https://carnetisena.com",
+        "https://www.carnetisena.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    # Permite el dominio principal y cualquier subdominio de carnetisena.com
+    # (incluido el frontend en Vercel si usa un dominio propio).
+    allow_origin_regex=(
+        r"https://([a-z0-9-]+\.)?carnetisena\.com"
+        r"|http://(localhost|127\.0\.0\.1):\d+"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.add_middleware(StripApiPrefixMiddleware)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Devuelve JSON también en errores no controlados.
+
+    Sin esto Starlette responde "Internal Server Error" en texto plano y los
+    clientes (Flutter) fallan al intentar interpretarlo como JSON. El traceback
+    completo queda en los logs de la API.
+    """
+    logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor. Revisa los logs de la API."},
+    )
 
 
 @app.get("/openapi.json", include_in_schema=False)

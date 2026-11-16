@@ -47,11 +47,11 @@ class EventService {
       '/eventos/nombres',
       token: await _requireToken(),
     );
-    final data = response.body.isNotEmpty
-        ? jsonDecode(response.body)
-        : <dynamic>[];
+    final data = _decodeJson(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_detail(data, 'No se pudieron cargar los eventos.'));
+      throw Exception(
+        _detail(data, 'No se pudieron cargar los eventos (HTTP ${response.statusCode}).'),
+      );
     }
     if (data is! List) {
       throw Exception('La respuesta de eventos no tiene un formato válido.');
@@ -64,12 +64,10 @@ class EventService {
       '/eventos/activos',
       token: await _requireToken(),
     );
-    final data = response.body.isNotEmpty
-        ? jsonDecode(response.body)
-        : <dynamic>[];
+    final data = _decodeJson(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        _detail(data, 'No se pudieron cargar los eventos activos.'),
+        _detail(data, 'No se pudieron cargar los eventos activos (HTTP ${response.statusCode}).'),
       );
     }
     if (data is! List) {
@@ -86,7 +84,9 @@ class EventService {
     }, token: await _requireToken());
     final data = _decodeMap(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_detail(data, 'No se pudo crear el evento.'));
+      throw Exception(
+        _detail(data, 'No se pudo crear el evento (HTTP ${response.statusCode}).'),
+      );
     }
     return EventQr.fromJson(data);
   }
@@ -99,13 +99,24 @@ class EventService {
     );
     final data = _decodeMap(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_detail(data, 'No se pudo cerrar el evento.'));
+      throw Exception(
+        _detail(data, 'No se pudo cerrar el evento (HTTP ${response.statusCode}).'),
+      );
+    }
+  }
+
+  dynamic _decodeJson(String body) {
+    if (body.isEmpty) return null;
+    try {
+      return jsonDecode(body);
+    } on FormatException {
+      // Un proxy o el servidor pueden devolver HTML/texto en un 500.
+      return null;
     }
   }
 
   Map<String, dynamic> _decodeMap(String body) {
-    if (body.isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(body);
+    final decoded = _decodeJson(body);
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
   }
 
