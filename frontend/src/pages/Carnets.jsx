@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { useCarnets, useGenerarCarnet, useRegenerarCarnet, useCambiarEstadoCarnet } from '../api/carnets';
 import { useUsers } from '../api/users';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
+import { buildCarnetData } from '../lib/carnetDesign';
 import { getErr } from '../lib/errors';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
@@ -139,12 +140,12 @@ export default function Carnets() {
   const onDownloadPdf = async (c) => {
     try {
       const u = userMap[c.user_id] || {};
-      await downloadCarnetPdf({
-        ...c,
-        email: u.email || u.username,
-        tipo_documento: u.tipo_documento || u.document_type,
-        foto_perfil: u.foto_perfil,
-      });
+      await downloadCarnetPdf(
+        buildCarnetData(c, {
+          ...u,
+          email: u.email || u.username,
+        }),
+      );
       toast.success('Carnet descargado en PDF');
     } catch (e) {
       toast.error(getErr(e));

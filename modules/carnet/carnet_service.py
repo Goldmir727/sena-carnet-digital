@@ -10,9 +10,18 @@ from core.redis_client import cache_get, cache_set, cache_delete
 from services.qr_service import generate_qr_token
 
 
+# Claves versionadas: los carnets cacheados con la estructura anterior no
+# contienen regional/programa/rol y no deben servirse a la nueva vista.
+CACHE_USER_KEY = "carnets:user:v2:{user_id}"
+CACHE_ALL_KEY = "carnets:all:v2:{estado}"
+
+
 async def invalidate_carnet_cache(user_id: int | None = None) -> None:
     if user_id is not None:
-        await cache_delete(f"carnets:user:{user_id}")
+        await cache_delete(
+            f"carnets:user:{user_id}",
+            CACHE_USER_KEY.format(user_id=user_id),
+        )
     await cache_delete("carnets:all*", "reports:*")
 
 
@@ -29,20 +38,32 @@ TRANSICIONES_PERMITIDAS = {
 # Sin columna status -> estado derivado: Vencido si expiration_date < hoy, else Activo.
 ESTADO_SQL = "CASE WHEN c.expiration_date < CURRENT_DATE THEN 'Vencido' ELSE 'Activo' END"
 
-# Centro de formación del titular, derivado de su matrícula activa más
-# reciente (matriculas -> fichas -> centros_formacion). No hay columna
-# de centro en users, por eso se resuelve aquí igual que en UserService.
-CENTRO_SQL = """(SELECT cf.nombre FROM matriculas m
-              JOIN fichas f ON f.id = m.ficha_id
-              LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
-              WHERE m.user_id = c.user_id AND m.status = 'activa'
-              ORDER BY m.id DESC LIMIT 1) AS centro_nombre,
-         (SELECT cf.id FROM matriculas m
-              JOIN fichas f ON f.id = m.ficha_id
-              LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
-              WHERE m.user_id = c.user_id AND m.status = 'activa'
-              ORDER BY m.id DESC LIMIT 1) AS centro_id"""
+# Centro/programa del titular, derivados de su matrícula activa más reciente
+# (matriculas -> fichas -> centros_formacion / programa_formacion). No hay
+# columna de centro en users, por eso se resuelve aquí igual que en UserService.
+# El LATERAL evita repetir la misma subconsulta para cada columna derivada.
+CENTRO_JOIN = """
+    LEFT JOIN LATERAL (
+        SELECT m.ficha_id
+        FROM matriculas m
+        WHERE m.user_id = c.user_id AND m.status = 'activa'
+        ORDER BY m.id DESC
+        LIMIT 1
+    ) um ON TRUE
+    LEFT JOIN fichas f ON f.id = um.ficha_id
+    LEFT JOIN centros_formacion cf ON cf.id = f.centro_id
+    LEFT JOIN programa_formacion pf ON pf.id = f.programa_id
+    LEFT JOIN roles r ON r.id = u.role_id
+"""
 
+CENTRO_COLS = """cf.nombre AS centro_nombre,
+         cf.id AS centro_id,
+         cf.codigo AS centro_codigo,
+         cf.regional,
+         cf.ciudad,
+         f.number AS ficha_numero,
+         pf.name AS programa_nombre,
+         r.name AS rol_nombre"""
 
 class CarnetService:
     def __init__(self, db: AsyncSession) -> None:
@@ -98,7 +119,8 @@ class CarnetService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al generar el carnet.")
 
     async def get_carnet_by_user(self, user_id: int) -> dict | None:
-        cached = await cache_get(f"carnets:user:{user_id}")
+        cache_key = CACHE_USER_KEY.format(user_id=user_id)
+        cached = await cache_get(cache_key)
         if cached is not None:
             return cached
         query = text(f"""
@@ -106,28 +128,15 @@ class CarnetService:
                          {ESTADO_SQL} AS estado, c.issue_date AS fecha_emision,
                          c.expiration_date AS fecha_vencimiento,
                          u.name AS nombres, u.last_name AS apellidos, u.email,
-                     u.document AS numero_documento, u.document_type AS tipo_documento,
-                     u.blood_type AS tipo_sangre,
-                     {CENTRO_SQL},
-                     (SELECT f.number FROM matriculas m
-                         JOIN fichas f ON f.id = m.ficha_id
-                         WHERE m.user_id = c.user_id AND m.status = 'activa'
-                         ORDER BY m.id DESC LIMIT 1) AS ficha_numero,
-                     (SELECT p.name FROM matriculas m
-                         JOIN fichas f ON f.id = m.ficha_id
-                         LEFT JOIN programa_formacion p ON p.id = f.programa_id
-                         WHERE m.user_id = c.user_id AND m.status = 'activa'
-                         ORDER BY m.id DESC LIMIT 1) AS programa_nombre,
-                     (SELECT cf.regional FROM matriculas m
-                         JOIN fichas f ON f.id = m.ficha_id
-                         JOIN centros_formacion cf ON cf.id = f.centro_id
-                         WHERE m.user_id = c.user_id AND m.status = 'activa'
-                         ORDER BY m.id DESC LIMIT 1) AS regional,
+                         u.document AS numero_documento, u.document_type AS tipo_documento,
+                         u.blood_type AS tipo_sangre,
+                         {CENTRO_COLS},
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
                      u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
+            {CENTRO_JOIN}
             WHERE c.user_id = :user_id
             ORDER BY c.id DESC LIMIT 1;
         """)
@@ -140,7 +149,7 @@ class CarnetService:
             for k in ("fecha_emision", "fecha_vencimiento"):
                 if data.get(k) is not None:
                     data[k] = str(data[k])
-            await cache_set(f"carnets:user:{user_id}", data, ex=settings.CACHE_TTL_CARNETS)
+            await cache_set(cache_key, data, ex=settings.CACHE_TTL_CARNETS)
         return data
 
     async def get_carnet_by_uuid(self, uuid: str) -> dict | None:
@@ -151,13 +160,14 @@ class CarnetService:
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
                      u.blood_type AS tipo_sangre,
-                     {CENTRO_SQL},
+                     {CENTRO_COLS},
                      u.photo_profile AS foto_perfil,
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
                      u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
+            {CENTRO_JOIN}
             WHERE c.qr_code = :uuid;
         """)
         result = await self.db.execute(query, {"uuid": uuid})
@@ -172,13 +182,14 @@ class CarnetService:
                          u.name AS nombres, u.last_name AS apellidos, u.email,
                      u.document AS numero_documento, u.document_type AS tipo_documento,
                      u.blood_type AS tipo_sangre,
-                     {CENTRO_SQL},
+                     {CENTRO_COLS},
                      u.photo_profile AS foto_perfil,
                      (u.name || ' ' || u.last_name) AS usuario_nombre,
                      u.document AS usuario_documento,
                      u.email AS usuario_email
             FROM carnets c
             JOIN users u ON u.id = c.user_id
+            {CENTRO_JOIN}
             WHERE c.id = :id;
         """)
         result = await self.db.execute(query, {"id": carnet_id})
@@ -195,7 +206,7 @@ class CarnetService:
         if estado in ("Suspendido", "Inactivo"):
             return []
 
-        cached = await cache_get(f"carnets:all:{estado or 'todos'}")
+        cached = await cache_get(CACHE_ALL_KEY.format(estado=estado or "todos"))
         if cached is not None:
             return cached
 
@@ -211,12 +222,13 @@ class CarnetService:
                       c.expiration_date AS fecha_vencimiento,
                       u.name AS nombres, u.last_name AS apellidos, u.document AS numero_documento,
                       u.document_type AS tipo_documento, u.blood_type AS tipo_sangre,
-                      {CENTRO_SQL},
+                      {CENTRO_COLS},
                       (u.name || ' ' || u.last_name) AS usuario_nombre,
                       u.document AS usuario_documento,
                       u.email AS usuario_email
                 FROM carnets c
                 JOIN users u ON u.id = c.user_id
+                {CENTRO_JOIN}
                 {where}
                 ORDER BY c.id DESC;
             """)
@@ -226,7 +238,7 @@ class CarnetService:
             for k in ("fecha_emision", "fecha_vencimiento"):
                 if r.get(k) is not None:
                     r[k] = str(r[k])
-        await cache_set(f"carnets:all:{estado or 'todos'}", data, ex=settings.CACHE_TTL_CARNETS)
+        await cache_set(CACHE_ALL_KEY.format(estado=estado or "todos"), data, ex=settings.CACHE_TTL_CARNETS)
         return data
 
     async def update_estado(self, carnet_id: int, nuevo_estado: str) -> dict:

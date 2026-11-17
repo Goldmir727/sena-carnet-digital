@@ -15,7 +15,19 @@ frontend/dist/
 revisar_db.py
 .env*
 !.env.example
-base.sql
-frontend/.env
+frontend/.env*
+!frontend/.env.example
+/base.sql
+*.dump
+*.backup
+*.bak
 *.xlsx
 prueba_*.xlsx
+
+# Entorno local temporal de desarrollo (cluster PostgreSQL propio, scripts y logs)
+dev_local/
+
+# Imágenes de referencia con datos personales
+fotospaprompt/
+
+!frontend/.env.example
