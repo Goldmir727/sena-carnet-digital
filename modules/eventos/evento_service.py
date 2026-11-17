@@ -31,10 +31,17 @@ class EventoService:
         return f"{base64.urlsafe_b64encode(payload).decode('utf-8')}.{signature}"
 
     async def get_saved_names(self) -> list[str]:
-        result = await self.db.execute(
-            text("SELECT DISTINCT name FROM eventos ORDER BY LOWER(name), name;")
-        )
-        return [row["name"] for row in result.mappings().all()]
+    result = await self.db.execute(
+        text("""
+            SELECT name FROM (
+                SELECT DISTINCT name
+                FROM eventos
+                WHERE name IS NOT NULL AND TRIM(name) != ''
+            ) AS sub
+            ORDER BY LOWER(name), name;
+        """)
+    )
+    return [row["name"] for row in result.mappings().all() if row["name"]]
 
     async def get_active(self) -> list[dict]:
         result = await self.db.execute(
