@@ -3,11 +3,7 @@ import {
   IdCard,
   Download,
   QrCode,
-  Mail,
   FileText,
-  User,
-  Droplet,
-  Building2,
   CalendarDays,
   Copy,
   Check,
@@ -18,6 +14,12 @@ import {
   Clock,
   Pencil,
   Lock,
+  User,
+  Mail,
+  Droplet,
+  Building2,
+  MapPin,
+  GraduationCap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMiCarnet } from '../api/carnets';
@@ -25,6 +27,8 @@ import { useUser, useUpdateUser } from '../api/users';
 import { useAuth } from '../hooks/useAuth';
 import { useGenerarQrCarnet, fetchQrImageBlob } from '../api/qr';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
+import { buildCarnetData } from '../lib/carnetDesign';
+import CarnetPreview from '../components/carnet/CarnetPreview';
 import CompleteProfile from '../components/CompleteProfile';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -60,7 +64,6 @@ function DetailRow({ icon: Icon, label, value, mono = false }) {
     </div>
   );
 }
-
 export default function MiCarnet() {
   const {
     data: carnet,
@@ -206,7 +209,7 @@ export default function MiCarnet() {
     };
   }, []);
 
-  if (isLoading || (authUser?.role_name === 'Aprendiz' && profile.isLoading && !profile.data)) {
+  if (isLoading || (profile.isLoading && !profile.data)) {
     return <LoadingState label="Consultando tu carnet…" />;
   }
 
@@ -251,24 +254,23 @@ export default function MiCarnet() {
     );
   }
 
-  const nombres = user?.nombres || user?.name || user?.email || '—';
-  const apellidos = user?.apellidos || user?.last_name || '';
-  const documento = user?.numero_documento || user?.document || '—';
-  const tipoDoc = user?.tipo_documento || user?.document_type || '';
-  const tipoSangre = user?.tipo_sangre || user?.blood_type || carnet.tipo_sangre || '—';
-  const centro = user?.centro_nombre || carnet.centro_nombre || '—';
+  if (!carnet) {
+    return <LoadingState label="Consultando tu carnet…" />;
+  }
+
+  const carnetData = buildCarnetData(carnet, {
+    ...user,
+    role_name: user?.role_name || authUser?.role_name,
+  });
+
   const esValido =
-    carnet.estado === 'Activo' && (!carnet.fecha_vencimiento || new Date(carnet.fecha_vencimiento) >= new Date());
+    carnet.estado === 'Activo' &&
+    (!carnet.fecha_vencimiento || new Date(carnet.fecha_vencimiento) >= new Date());
 
   const onDownload = async () => {
     setPdfLoading(true);
     try {
-      await downloadCarnetPdf({
-        ...carnet,
-        foto_perfil: user?.foto_perfil,
-        tipo_sangre: user?.tipo_sangre || user?.blood_type || carnet.tipo_sangre,
-        centro_nombre: user?.centro_nombre || carnet.centro_nombre,
-      });
+      await downloadCarnetPdf(carnetData);
       toast.success('Carnet descargado en PDF');
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || 'No se pudo descargar el carnet');
@@ -321,10 +323,32 @@ export default function MiCarnet() {
         breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Mi carnet' }]}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-6">
+          <Card className="overflow-hidden" padding={false}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
+                  <IdCard className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-sena-ink">Vista previa del carnet</h2>
+                  <p className="text-xs text-slate-400">Así se verá tu carnet digital institucional</p>
+                </div>
+              </div>
+              <StatusBadge estado={carnet.estado} />
+            </div>
+            <div className="bg-slate-50/70 px-4 py-6 sm:px-8">
+              <div className="mx-auto w-full max-w-[560px]">
+                <CarnetPreview carnet={carnetData} qrUrl={qrUrl} />
+              </div>
+              <p className="mt-4 text-center text-xs text-slate-400">
+                Formato CR80 · 85,6 × 53,98 mm
+              </p>
+            </div>
+          </Card>
           <Card>
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
                   <User className="h-5 w-5" />
@@ -339,54 +363,25 @@ export default function MiCarnet() {
               </Button>
             </div>
             <div className="divide-y divide-slate-100">
-              <DetailRow icon={User} label="Nombre completo" value={`${nombres} ${apellidos}`.trim()} />
-              <DetailRow icon={IdCard} label="Tipo de documento" value={tipoDoc} />
-              <DetailRow icon={IdCard} label="Número de documento" value={documento} />
-              <DetailRow icon={Mail} label="Correo electrónico" value={user?.email} />
-              <DetailRow icon={Droplet} label="Tipo de sangre" value={tipoSangre} />
-              <DetailRow icon={Building2} label="Centro de formación" value={centro} />
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-sena-ink">Estado del carnet</h2>
-                <p className="text-xs text-slate-400">Vigencia y condición actual</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 pt-4">
-              <StatusBadge estado={carnet.estado} />
-              {esValido ? (
-                <BadgeSuccess />
-              ) : (
-                <BadgeWarn />
-              )}
-            </div>
-            <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <CalendarDays className="h-4 w-4 text-slate-400" />
-                Emitido: <span className="font-medium text-sena-ink">{fmt(carnet.fecha_emision)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <CalendarDays className="h-4 w-4 text-slate-400" />
-                Vence: <span className="font-medium text-sena-ink">{fmt(carnet.fecha_vencimiento)}</span>
-              </div>
+              <DetailRow icon={User} label="Nombre completo" value={`${carnetData.nombres} ${carnetData.apellidos}`.trim()} />
+              <DetailRow icon={IdCard} label="Tipo de documento" value={carnetData.tipo_documento} />
+              <DetailRow icon={IdCard} label="Número de documento" value={carnetData.numero_documento} />
+              <DetailRow icon={Mail} label="Correo electrónico" value={user?.email || carnetData.usuario_email} />
+              <DetailRow icon={Droplet} label="Tipo de sangre" value={carnetData.tipo_sangre} />
+              <DetailRow icon={Building2} label="Centro de formación" value={carnetData.centro_nombre} />
+              <DetailRow icon={MapPin} label="Regional" value={carnetData.regional} />
+              <DetailRow icon={MapPin} label="Ciudad" value={carnetData.ciudad} />
+              <DetailRow icon={GraduationCap} label="Programa" value={carnetData.programa_nombre} />
+              <DetailRow icon={ShieldCheck} label="Rol" value={carnetData.rol_nombre || authUser?.role_name} />
             </div>
           </Card>
         </div>
 
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <QrCode className="h-5 w-5 text-sena-green" />
-                <h2 className="text-base font-semibold text-sena-ink">Código de acceso</h2>
-              </div>
-              <StatusBadge estado={carnet.estado} />
+          <Card className="overflow-hidden" padding={false}>
+            <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
+              <QrCode className="h-5 w-5 text-sena-green" />
+              <h2 className="text-base font-semibold text-sena-ink">Código de acceso</h2>
             </div>
             <div className="flex flex-col items-center px-5 py-6">
               <div className="flex h-56 w-56 items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
@@ -397,7 +392,7 @@ export default function MiCarnet() {
                     {qrError ? (
                       <>
                         <AlertTriangle className="h-6 w-6 text-red-500" />
-                        <p className="text-xs text-slate-400">No se pudo generar el QR. Intenta descargar el PDF.</p>
+                        <p className="text-xs text-slate-400">No se pudo cargar el código QR del carnet.</p>
                       </>
                     ) : (
                       <Loader />
@@ -427,14 +422,39 @@ export default function MiCarnet() {
             </div>
           </Card>
 
-          <Card className="overflow-hidden">
+          <Card>
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sena-tint-100 text-sena-green">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-sena-ink">Estado del carnet</h2>
+                <p className="text-xs text-slate-400">Vigencia y condición actual</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-4">
+              <StatusBadge estado={carnet.estado} />
+              {esValido ? <BadgeSuccess /> : <BadgeWarn />}
+            </div>
+            <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+                Emitido: <span className="font-medium text-sena-ink">{fmt(carnet.fecha_emision)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+                Vence: <span className="font-medium text-sena-ink">{fmt(carnet.fecha_vencimiento)}</span>
+              </div>
+            </div>
+          </Card>
+          <Card className="overflow-hidden" padding={false}>
             <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sena-tint-100 text-sena-green">
                 <Zap className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-sena-ink">QR de acceso</h2>
-                <p className="text-xs text-slate-400">Para validar en portería</p>
+                <h2 className="text-base font-semibold text-sena-ink">QR de acceso temporal</h2>
+                <p className="text-xs text-slate-400">Para validar en portería · un solo uso</p>
               </div>
             </div>
             <div className="flex flex-col items-center px-5 py-6">

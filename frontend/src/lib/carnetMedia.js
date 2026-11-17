@@ -1,17 +1,20 @@
 import { getAccessToken } from '../utils/session';
 import API_BASE from '../api/base';
+import {
+  CARNET,
+  CARNET_COLORS,
+  CARNET_LAYOUT,
+  LOGO_URL,
+  buildCarnetData,
+  documentLine,
+  hexToRgb,
+  photoUrl,
+  ptToMm,
+  regionalLabel,
+  roleLabel,
+} from './carnetDesign';
 
 const BASE = API_BASE;
-
-const C_GREEN = '#0F7A4D';
-const C_GREEN_DARK = '#0A5A39';
-const C_GREEN_TINT = '#E4F3EC';
-const C_GREEN_TINT_50 = '#F1FAF6';
-const C_YELLOW = '#F2B43A';
-const C_INK = '#17212B';
-const C_MUTED = '#8A99A6';
-const C_BORDER = '#CDE8DA';
-const C_PAGE = '#F6FAF7';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -38,300 +41,332 @@ async function fetchQrDataUrl(id) {
   return blobToDataUrl(await res.blob());
 }
 
-function photoUrl(foto) {
-  if (!foto) return null;
-  if (/^https?:\/\//i.test(foto)) return foto;
-  const clean = String(foto).replace(/\\/g, '/').replace(/^\/+/, '');
-  return `${BASE}/${clean}`;
-}
-
-async function loadImageDataUrl(foto) {
-  const src = photoUrl(foto);
-  if (!src) return null;
+async function fetchLogoDataUrl() {
   try {
-    const res = await fetch(src);
+    const res = await fetch(LOGO_URL);
     if (!res.ok) return null;
-    const blob = await res.blob();
-    const type = blob.type || 'image/png';
-    return { dataUrl: await blobToDataUrl(blob), format: type.includes('png') ? 'PNG' : 'JPEG' };
+    return await blobToDataUrl(await res.blob());
   } catch {
     return null;
   }
 }
 
-function fmtLarga(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CO', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('No se pudo cargar la fotografía'));
+    img.src = dataUrl;
   });
 }
 
-function estadoColor(estado) {
-  switch (String(estado || '').toLowerCase()) {
-    case 'activo':
-      return { bg: [15, 122, 77], fg: '#FFFFFF' };
-    case 'suspendido':
-      return { bg: [217, 119, 6], fg: '#FFFFFF' };
-    case 'vencido':
-      return { bg: [220, 38, 38], fg: '#FFFFFF' };
-    default:
-      return { bg: [100, 116, 139], fg: '#FFFFFF' };
+// Recorta la fotografía al centro en un cuadrado y la exporta como JPEG.
+// Se hace en canvas para que jsPDF no deforme imágenes rectangulares.
+async function squarePhotoDataUrl(foto) {
+  const src = photoUrl(foto);
+  if (!src) return null;
+  try {
+    const res = await fetch(src);
+    if (!res.ok) return null;
+    const dataUrl = await blobToDataUrl(await res.blob());
+    const img = await loadImageElement(dataUrl);
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
+    const side = Math.min(width, height);
+    if (!side) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 600, 600);
+    ctx.drawImage(
+      img,
+      (width - side) / 2,
+      (height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      600,
+      600,
+    );
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } catch {
+    return null;
   }
+}
+
+function baseline(topMm, sizePt) {
+  return topMm + ptToMm(sizePt) * 0.8;
+}
+
+function fitOneLine(doc, text, maxWidth, font, style, size, charSpace = 0) {
+  doc.setFont(font, style);
+  doc.setFontSize(size);
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const measure = (value) =>
+    doc.getTextWidth(value) + (charSpace > 0 ? charSpace * Math.max(0, value.length - 1) : 0);
+  if (measure(clean) <= maxWidth) return clean;
+  let cut = clean;
+  while (cut.length > 0 && measure(`${cut}…`) > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return cut ? `${cut}…` : '';
+}
+
+function wrapLines(doc, text, maxWidth, font, style, size, maxLines) {
+  doc.setFont(font, style);
+  doc.setFontSize(size);
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (doc.getTextWidth(candidate) <= maxWidth) {
+      line = candidate;
+    } else if (line) {
+      lines.push(line);
+      line = word;
+    } else {
+      // Una sola palabra más ancha que la tarjeta: se recorta con elipsis
+      // para que nunca desborde el área de contenido.
+      lines.push(fitOneLine(doc, word, maxWidth, font, style, size));
+      line = '';
+    }
+  }
+  if (line) lines.push(line);
+
+  if (lines.length > maxLines) {
+    const kept = lines.slice(0, maxLines);
+    let last = kept[maxLines - 1];
+    while (last.length > 0 && doc.getTextWidth(`${last}…`) > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    kept[maxLines - 1] = `${last}…`;
+    return kept;
+  }
+  return lines;
+}
+
+function drawPhotoPlaceholder(doc, photo) {
+  const cx = photo.x + photo.size / 2;
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.photoInk));
+  doc.circle(cx, photo.y + photo.size * 0.38, photo.size * 0.11, 'F');
+  doc.ellipse(cx, photo.y + photo.size * 0.76, photo.size * 0.21, photo.size * 0.14, 'F');
+
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.photoInk));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(4.6);
+  doc.text('SIN FOTO', cx, photo.y + photo.size * 0.94, { align: 'center' });
 }
 
 export async function downloadCarnetPdf(carnet) {
-  const { jsPDF, GState } = await import('jspdf');
-
-  const nombre = `${carnet.nombres || carnet.name || ''} ${carnet.apellidos || carnet.last_name || ''}`
-    .replace(/\s+/g, ' ')
-    .trim() || '—';
-  const documento = carnet.numero_documento || carnet.document || '—';
-  const tipoDoc = carnet.tipo_documento || carnet.document_type || 'CC';
-  const email = carnet.email || carnet.usuario_email || '—';
-  const tipoSangre = carnet.tipo_sangre || carnet.blood_type || '—';
-  const centro = carnet.centro_nombre || carnet.centro || '—';
-  const uuid = carnet.uuid || carnet.codigo_qr || '—';
-  const estado = carnet.estado || '—';
-
-  const [qr, foto] = await Promise.all([
-    fetchQrDataUrl(carnet.id).catch(() => null),
-    carnet.foto_perfil ? loadImageDataUrl(carnet.foto_perfil) : Promise.resolve(null),
+  const data = buildCarnetData(carnet || {});
+  if (!carnet?.id) {
+    throw new Error('El carnet no tiene identificador para cargar el código QR.');
+  }
+  const [qr, photo, logo] = await Promise.all([
+    // El QR permanente es obligatorio en el PDF: si no se puede cargar,
+    // es mejor informar el error que generar un carnet incompleto.
+    fetchQrDataUrl(carnet.id).catch(() => {
+      throw new Error('No se pudo cargar el código QR permanente del carnet.');
+    }),
+    squarePhotoDataUrl(data.foto_perfil),
+    fetchLogoDataUrl(),
   ]);
 
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-
-  // ===== Fondo de página =====
-  doc.setFillColor(C_PAGE);
-  doc.rect(0, 0, W, H, 'F');
-
-  // ===== Encabezado institucional =====
-  doc.setFillColor(C_GREEN);
-  doc.rect(0, 0, W, 50, 'F');
-  doc.setFillColor(C_GREEN_DARK);
-  doc.rect(0, 0, W, 8, 'F');
-  doc.setFillColor(C_YELLOW);
-  doc.rect(0, 47.5, W, 2.5, 'F');
-
-  // Cresta / emblema
-  doc.setFillColor(C_GREEN_DARK);
-  doc.circle(26, 25, 12.8, 'F');
-  doc.setDrawColor(C_YELLOW);
-  doc.setLineWidth(1.1);
-  doc.circle(26, 25, 9.4, 'S');
-  doc.setTextColor('#FFFFFF');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('SENA', 26, 24.6, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(3.4);
-  doc.text('COLOMBIA', 26, 29, { align: 'center' });
-
-  // Título
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.setTextColor('#FFFFFF');
-  doc.text('SENA', 48, 21);
-  doc.setFontSize(9.5);
-  doc.setTextColor(C_YELLOW);
-  doc.text('CARNET DIGITAL INSTITUCIONAL', 48, 28);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor('#CFE8DC');
-  doc.text('Servicio Nacional de Aprendizaje — Colombia', 48, 34.5);
-
-  // Chip de estado
-  const ec = estadoColor(estado);
-  const estadoLabel = String(estado).toUpperCase() || '—';
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  const textW = doc.getTextWidth(estadoLabel);
-  const pillW = textW + 13;
-  const pillLeft = 196 - pillW;
-  doc.setFillColor('#FFFFFF');
-  doc.roundedRect(pillLeft, 15, pillW, 11, 5.5, 5.5, 'F');
-  doc.setFillColor(ec.bg[0], ec.bg[1], ec.bg[2]);
-  doc.circle(pillLeft + 5, 20.5, 1.7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(C_GREEN_DARK);
-  doc.text(estadoLabel, pillLeft + 9.5, 21.5);
-
-  // ===== Tarjeta =====
-  const cardX = 14;
-  const cardY = 62;
-  const cardW = W - 28;
-  const cardH = 184;
-
-  // sombra
-  doc.setFillColor('#E3EBE6');
-  doc.roundedRect(cardX + 1.5, cardY + 1.5, cardW, cardH, 4, 4, 'F');
-  // cuerpo
-  doc.setFillColor('#FFFFFF');
-  doc.setDrawColor(C_BORDER);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'FD');
-
-  // Marca de agua
-  doc.setGState(new GState({ opacity: 0.05 }));
-  doc.setTextColor(C_GREEN_DARK);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(72);
-  doc.text('SENA', cardX + cardW / 2, cardY + cardH / 2 + 20, { align: 'center', angle: 32 });
-  doc.setGState(new GState({ opacity: 1 }));
-
-  // Banda superior de la tarjeta
-  doc.setFillColor(C_GREEN);
-  doc.roundedRect(cardX, cardY, cardW, 22, 4, 4, 'F');
-  doc.setFillColor(C_GREEN);
-  doc.rect(cardX, cardY + 16, cardW, 6, 'F');
-  doc.setTextColor('#FFFFFF');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('IDENTIFICACIÓN INSTITUCIONAL', cardX + 8, cardY + 14);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor('#D6EDE2');
-  doc.text('SENA · COLOMBIA', cardX + cardW - 8, cardY + 14, { align: 'right' });
-
-  // ===== Foto =====
-  const plateX = cardX + 10;
-  const plateY = cardY + 34;
-  doc.setFillColor(C_GREEN_TINT);
-  doc.setDrawColor(C_BORDER);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(plateX, plateY, 52, 66, 3, 3, 'FD');
-
-  if (foto) {
-    doc.setFillColor('#FFFFFF');
-    doc.roundedRect(plateX + 3, plateY + 3, 46, 57, 2, 2, 'F');
-    doc.addImage(foto.dataUrl, foto.format, plateX + 4, plateY + 4, 44, 55);
-    doc.setDrawColor(C_BORDER);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(plateX + 3, plateY + 3, 46, 57, 2, 2, 'S');
-  } else {
-    const iniciales =
-      nombre
-        .split(' ')
-        .filter((p) => p && p[0])
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase() || 'SD';
-    doc.setTextColor(C_GREEN);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(30);
-    doc.text(iniciales, plateX + 26, plateY + 34, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    doc.setTextColor('#B7C7BC');
-    doc.text('SIN FOTO', plateX + 26, plateY + 42, { align: 'center' });
-  }
-
-  doc.setTextColor(C_MUTED);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(5.5);
-  doc.text('FOTO DEL TITULAR', plateX + 26, plateY + 73, { align: 'center' });
-
-  // ===== Nombre / datos =====
-  const nameX = cardX + 74;
-  const nameW = cardW - 84;
-
-  const nameLines = doc.splitTextToSize(nombre, nameW);
-  doc.setTextColor(C_INK);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text(nameLines, nameX, cardY + 50);
-
-  const nameLast = cardY + 50 + (nameLines.length - 1) * 6.5;
-  doc.setFillColor(C_YELLOW);
-  doc.roundedRect(nameX, nameLast + 3.5, 44, 1.1, 0.55, 0.55, 'F');
-
-  const rows = [
-    { label: 'Documento', value: `${tipoDoc} ${documento}` },
-    { label: 'Tipo de sangre', value: tipoSangre },
-    { label: 'Centro de formación', value: centro },
-    { label: 'Correo electrónico', value: email },
-    { label: 'Válido hasta', value: fmtLarga(carnet.fecha_vencimiento) },
-    { label: 'Código único (UUID)', value: uuid, mono: true },
-  ];
-
-  let fY = Math.max(cardY + 68, nameLast + 10);
-  doc.setDrawColor('#E8EFEA');
-  doc.setLineWidth(0.25);
-  const valW = cardX + cardW - 8 - nameX;
-  rows.forEach((row, i) => {
-    const valLines = doc.splitTextToSize(String(row.value), valW).slice(0, 2);
-    if (i > 0) {
-      doc.setLineDashPattern([1.2, 1.6], 0);
-      doc.line(nameX, fY - 2.5, cardX + cardW - 8, fY - 2.5);
-      doc.setLineDashPattern([], 0);
-    }
-    doc.setTextColor(C_MUTED);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6);
-    doc.text(row.label.toUpperCase(), nameX, fY);
-    doc.setTextColor(C_INK);
-    doc.setFont(row.mono ? 'courier' : 'helvetica', 'normal');
-    doc.setFontSize(row.mono ? 8 : 10);
-    doc.text(valLines, nameX, fY + 4);
-    fY += 7 + valLines.length * 4.5;
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [CARNET.width, CARNET.height],
+    orientation: 'portrait',
+    compress: true,
   });
 
-  // ===== Panel de validación =====
-  const panelTop = 198;
-  const panelH = 44;
-  doc.setFillColor(C_GREEN_TINT_50);
-  doc.setDrawColor(C_BORDER);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(cardX + 6, panelTop, cardW - 12, panelH, 4, 4, 'FD');
+  const W = CARNET.width;
+  const H = CARNET.height;
+  const L = CARNET_LAYOUT;
 
-  // QR
-  doc.setFillColor('#FFFFFF');
-  doc.setDrawColor(C_BORDER);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(cardX + 13, panelTop + 5, 36, 36, 2, 2, 'FD');
-  if (qr) {
-    doc.addImage(qr, 'PNG', cardX + 16, panelTop + 8, 30, 30);
+  // Fondo completamente blanco.
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.white));
+  doc.rect(0, 0, W, H, 'F');
+
+  // Franja verde superior.
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.greenBand));
+  doc.rect(0, 0, W, L.topBand.h, 'F');
+
+  // Logotipo institucional transparente.
+  if (logo) {
+    doc.addImage(logo, 'PNG', L.logo.x, L.logo.y, L.logo.w, L.logo.h);
   } else {
-    doc.setTextColor(C_MUTED);
+    doc.setTextColor(...hexToRgb(CARNET_COLORS.greenLogo));
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.text('QR no disponible', cardX + 31, panelTop + 22, { align: 'center' });
+    doc.setFontSize(18);
+    doc.text('SENA', L.logo.x, L.logo.y + L.logo.h / 2 + 2);
   }
 
-  // Texto de validación
-  const tx = cardX + 58;
-  doc.setTextColor(C_GREEN_DARK);
+  // Fotografía cuadrada con recorte central.
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.photoBg));
+  doc.rect(L.photo.x, L.photo.y, L.photo.size, L.photo.size, 'F');
+  if (photo) {
+    doc.addImage(photo, 'JPEG', L.photo.x, L.photo.y, L.photo.size, L.photo.size);
+  } else {
+    drawPhotoPlaceholder(doc, L.photo);
+  }
+  doc.setDrawColor(...hexToRgb(CARNET_COLORS.line));
+  doc.setLineWidth(0.2);
+  doc.rect(L.photo.x, L.photo.y, L.photo.size, L.photo.size, 'S');
+
+  // Línea divisoria verde.
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.green));
+  doc.rect(0, L.divider.y, W, L.divider.h, 'F');
+
+  // Nombre y apellidos.
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.green));
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('VALIDACIÓN DEL CÓDIGO', tx, panelTop + 11);
-  doc.setTextColor(C_MUTED);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  const msg = doc.splitTextToSize(
-    'Escanea el código QR o digita el UUID en el punto de validación del SENA.',
-    cardX + cardW - 14 - tx
+  doc.setFontSize(L.name1.size);
+  doc.text(
+    fitOneLine(doc, data.nombres, L.contentW, 'helvetica', 'bold', L.name1.size),
+    L.contentX,
+    baseline(L.name1.y, L.name1.size),
   );
-  doc.text(msg, tx, panelTop + 17.5);
-  const genLine = doc.splitTextToSize(`Generado el ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}`, cardX + cardW - 14 - tx);
-  doc.setTextColor('#AABBAA');
-  doc.setFontSize(6);
-  doc.text(genLine, tx, panelTop + 37);
 
-  // ===== Pie de página =====
-  doc.setDrawColor(C_BORDER);
-  doc.setLineWidth(0.4);
-  doc.line(16, 250, W - 16, 250);
-  doc.setTextColor(C_MUTED);
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.ink));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(L.name2.size);
+  doc.text(
+    fitOneLine(doc, data.apellidos, L.contentW, 'helvetica', 'bold', L.name2.size),
+    L.contentX,
+    baseline(L.name2.y, L.name2.size),
+  );
+
+  // Documento y tipo de sangre.
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.muted));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(L.doc.size);
+  doc.setCharSpace(0.12);
+  doc.text(
+    fitOneLine(doc, documentLine(data), L.contentW - 1, 'helvetica', 'bold', L.doc.size, 0.12),
+    L.contentX,
+    baseline(L.doc.y, L.doc.size),
+  );
+  doc.setCharSpace(0);
+
+  // Identificación del rol (Aprendiz, Docente, etc.).
+  const badgeText = fitOneLine(
+    doc,
+    roleLabel(data),
+    L.contentW - 5,
+    'helvetica',
+    'bold',
+    L.badge.size,
+  );
+  const badgeWidth = Math.min(
+    Math.max(doc.getTextWidth(badgeText) + 7, 14),
+    L.contentW,
+  );
+  doc.setDrawColor(...hexToRgb(CARNET_COLORS.green));
+  doc.setLineWidth(0.25);
+  doc.roundedRect(
+    L.contentX,
+    L.badge.y,
+    badgeWidth,
+    L.badge.h,
+    L.badge.radius,
+    L.badge.radius,
+    'S',
+  );
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.green));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(L.badge.size);
+  doc.text(
+    badgeText,
+    L.contentX + badgeWidth / 2,
+    L.badge.y + L.badge.h / 2 + ptToMm(L.badge.size) * 0.35,
+    { align: 'center' },
+  );
+
+  // Panel y QR permanente real.
+  doc.setDrawColor(...hexToRgb(CARNET_COLORS.line));
+  doc.setLineWidth(0.25);
+  doc.roundedRect(
+    L.qrPanel.x,
+    L.qrPanel.y,
+    L.qrPanel.w,
+    L.qrPanel.h,
+    L.qrPanel.radius,
+    L.qrPanel.radius,
+    'S',
+  );
+
+  if (qr) {
+    const qs = L.qr.size;
+    doc.addImage(qr, 'PNG', (W - qs) / 2, L.qrPanel.y + (L.qrPanel.h - qs) / 2, qs, qs);
+  } else {
+    doc.setTextColor(...hexToRgb(CARNET_COLORS.muted));
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(4.6);
+    doc.text('QR NO DISPONIBLE', W / 2, L.qrPanel.y + L.qrPanel.h / 2, { align: 'center' });
+  }
+
+  // Centro de formación.
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.muted));
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text('SENA — Sistema de Gestión de Carnets', 16, 256);
-  doc.text('Documento generado electrónicamente · sin firma manuscrita', W - 16, 256, { align: 'right' });
+  doc.setFontSize(L.centro.size);
+  doc.text(
+    fitOneLine(
+      doc,
+      data.centro_nombre || 'Centro de formación no disponible',
+      L.contentW,
+      'helvetica',
+      'normal',
+      L.centro.size,
+    ),
+    L.contentX,
+    baseline(L.centro.y, L.centro.size),
+  );
 
-  const filename = uuid && uuid !== '—' ? `carnet_${uuid.slice(0, 12)}.pdf` : `carnet_${carnet.id}.pdf`;
-  doc.save(filename);
+  // Programa de formación (máximo dos líneas).
+  const programa = wrapLines(
+    doc,
+    data.programa_nombre || 'Programa de formación no disponible',
+    L.contentW,
+    'helvetica',
+    'bold',
+    L.programa.size,
+    2,
+  );
+  doc.setTextColor(...hexToRgb(CARNET_COLORS.ink));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(L.programa.size);
+  programa.forEach((line, index) => {
+    doc.text(
+      line,
+      L.contentX,
+      baseline(L.programa.y + index * L.programa.line, L.programa.size),
+    );
+  });
+
+  // Franja inferior gris con la regional del centro de formación.
+  doc.setFillColor(...hexToRgb(CARNET_COLORS.bottomBand));
+  doc.rect(0, L.bottomBand.y, W, L.bottomBand.h, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(L.bottomBand.size);
+  doc.setCharSpace(0.32);
+  doc.text(
+    fitOneLine(doc, regionalLabel(data.regional), W - 6, 'helvetica', 'bold', L.bottomBand.size, 0.32),
+    W / 2,
+    L.bottomBand.y + L.bottomBand.h / 2 + ptToMm(L.bottomBand.size) * 0.34,
+    { align: 'center' },
+  );
+  doc.setCharSpace(0);
+
+  const rawUuid = String(data.uuid || data.codigo_qr || data.id || 'carnet');
+  const safeName = rawUuid.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 12) || String(data.id || 'carnet');
+  doc.save(`carnet_${safeName}.pdf`);
 }

@@ -19,7 +19,7 @@ const FEATURES = [
   },
 ];
 
-export default function AuthLayout({ children, footer }) {
+export default function AuthLayout({ children, footer, sidebarFooter }) {
   return (
     <div className="flex min-h-screen bg-sena-bg">
       {/* Panel institucional (izquierda, escritorio) */}
@@ -66,9 +66,12 @@ export default function AuthLayout({ children, footer }) {
           </ul>
         </div>
 
-        <p className="relative z-10 text-xs text-sena-tint-200">
-          © {new Date().getFullYear()} Servicio Nacional de Aprendizaje — SENA
-        </p>
+        <div className="relative z-10 space-y-3">
+          {sidebarFooter}
+          <p className="text-xs text-sena-tint-200">
+            © {new Date().getFullYear()} Servicio Nacional de Aprendizaje — SENA
+          </p>
+        </div>
       </div>
 
       {/* Panel de formulario */}

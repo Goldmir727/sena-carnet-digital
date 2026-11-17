@@ -7,6 +7,7 @@ import AuthLayout from '../components/ui/AuthLayout';
 import Logo from '../components/ui/Logo';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import ApkDownloadLink from '../components/ui/ApkDownloadLink';
 
 export default function Login() {
   const { isAuthenticated, authReady, step } = useAuth();
@@ -17,6 +18,7 @@ export default function Login() {
   return (
     <AuthLayout
       footer="Servicio Nacional de Aprendizaje — SENA"
+      sidebarFooter={<ApkDownloadLink tone="dark" />}
     >
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-raised">
         <div className="border-b border-slate-100 px-6 py-5 sm:px-8">

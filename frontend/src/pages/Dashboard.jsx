@@ -23,6 +23,7 @@ import { useMiCarnet } from '../api/carnets';
 import Zone from '../components/ui/Zone';
 import StatusBadge from '../components/ui/StatusBadge';
 import ErrorState from '../components/ui/ErrorState';
+import ApkDownloadLink from '../components/ui/ApkDownloadLink';
 import cn from '../lib/cn';
 
 const SHORTCUTS = [
@@ -238,6 +239,11 @@ export default function Dashboard() {
             </>
           )}
         </Zone>
+      </div>
+
+      {/* Aplicación móvil — acceso discreto al APK institucional */}
+      <div className="flex justify-center border-t border-slate-200/70 pt-6">
+        <ApkDownloadLink />
       </div>
     </div>
   );
