@@ -13,7 +13,7 @@ export default function Login() {
   const { isAuthenticated, authReady, step } = useAuth();
   const [loginInfo, setLoginInfo] = useState(null);
 
-  if (authReady && isAuthenticated) return <Navigate to="/" replace />;
+  if (authReady && isAuthenticated) return <Navigate to="/panel" replace />;
 
   return (
     <AuthLayout
@@ -124,7 +124,7 @@ function TwoFactorStep({ loginInfo, onBack }) {
     e.preventDefault();
     try {
       await verifyCode(code.trim());
-      navigate('/', { replace: true });
+      navigate('/panel', { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Código inválido o expirado');
     }

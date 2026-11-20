@@ -1,11 +1,9 @@
-import { Link } from 'react-router-dom';
 import { ArrowLeft, Compass } from 'lucide-react';
 import Logo from '../components/ui/Logo';
-import Button from '../components/ui/Button';
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-sena-bg px-4 text-center">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-sena-bg px-4 text-center">
       <div className="absolute left-1/2 top-10 -translate-x-1/2 opacity-80">
         <Logo size="md" />
       </div>
@@ -20,14 +18,12 @@ export default function NotFound() {
       <p className="mt-8 text-7xl font-extrabold tracking-tight text-sena-gradient">404</p>
       <h1 className="mt-2 text-xl font-bold text-sena-ink">Página no encontrada</h1>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-        La ruta que buscas no existe o fue movida. Vuelve al panel para continuar trabajando.
+        La ruta que buscas no existe o fue movida. Vuelve a la presentación para continuar.
       </p>
 
-      <Link to="/" className="mt-6">
-        <Button icon={ArrowLeft} size="lg">
-          Volver al inicio
-        </Button>
-      </Link>
-    </div>
+      <a href="/" className="mt-6 inline-flex items-center gap-2 rounded-lg bg-sena-green px-5 py-3 font-semibold text-white hover:bg-sena-green-dark">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Volver al inicio
+      </a>
+    </main>
   );
 }

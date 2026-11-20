@@ -51,7 +51,7 @@ export default function Validar() {
         title="Validar acceso"
         description="Verifica la identidad y el estado del carnet digital ante la entrada al centro de formación."
         icon={ShieldCheck}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Validar acceso' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Validar acceso' }]}
       />
 
       <Card>

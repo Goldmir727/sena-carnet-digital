@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .public-site *, .public-site *::before, .public-site *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 @theme {
   /* ===== Paleta institucional SENA (tokens canónicos) ===== */
   --color-sena-green: #0F7A4D;

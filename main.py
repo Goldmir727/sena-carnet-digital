@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.database import get_db
 from core.security import get_admin_user
+from core.seo import ApiNoIndexMiddleware
 
 from modules.auth.auth_router import router as auth_router
 from modules.roles.role_router import router as role_router
@@ -119,6 +120,7 @@ allow_origins=[
 )
 
 app.add_middleware(StripApiPrefixMiddleware)
+app.add_middleware(ApiNoIndexMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -133,6 +135,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "Error interno del servidor. Revisa los logs de la API."},
+        headers={"X-Robots-Tag": "noindex, nofollow"},
     )
 
 
@@ -146,6 +149,13 @@ async def openapi_root_fallback():
 async def health_check():
     from core.redis_client import cache_stats
     return {"status": "ok", "service": "carnets-api", "cache": await cache_stats()}
+
+
+@app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def api_robots():
+    # Se permite rastrear para que los buscadores puedan leer X-Robots-Tag.
+    # robots.txt no sustituye los permisos ni la autenticación de las rutas.
+    return "User-agent: *\nAllow: /\n"
 
 
 @app.get("/cache/stats", tags=["Sistema"])

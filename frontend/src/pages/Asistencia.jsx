@@ -572,7 +572,7 @@ export default function Asistencia() {
             : 'Consulta los registros de asistencia capturados por el sistema.'
         }
         icon={CalendarCheck}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Asistencia' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Asistencia' }]}
       />
 
       <div className="flex flex-wrap gap-2">

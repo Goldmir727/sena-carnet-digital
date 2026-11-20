@@ -79,7 +79,7 @@ export default function Help() {
         title="Ayuda"
         description="Guía rápida para usar el sistema carnet digital. Si no encuentras lo que buscas, contacta a la Coordinación."
         icon={HelpCircle}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Ayuda' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Ayuda' }]}
       />
 
       <HelpSection icon={LogIn} question="¿Cómo iniciar sesión?">

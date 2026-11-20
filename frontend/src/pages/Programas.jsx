@@ -122,7 +122,7 @@ export default function Programas() {
         title="Programas de formación"
         description="Gestiona los programas a los que se vinculan las fichas de formación."
         icon={BookOpen}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Programas' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Programas' }]}
         actions={
           <Button icon={Plus} onClick={openCreate}>
             Nuevo programa

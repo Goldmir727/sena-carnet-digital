@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const MENU_ITEMS = [
-  { to: '/', label: 'Inicio', icon: LayoutDashboard, permission: 'dashboard.view', end: true },
+  { to: '/panel', label: 'Inicio', icon: LayoutDashboard, permission: 'dashboard.view', end: true },
   { to: '/usuarios', label: 'Usuarios', icon: Users, permission: 'users.read' },
   { to: '/grupos', label: 'Grupos', icon: Network, permission: 'grupos.read' },
   { to: '/centros', label: 'Centros', icon: Building2, permission: 'centros.read' },

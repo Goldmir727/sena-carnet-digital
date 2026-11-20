@@ -118,7 +118,7 @@ export default function Reportes() {
         title="Reportes"
         description="Indicadores y exportaciones con datos reales del sistema."
         icon={BarChart3}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Reportes' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Reportes' }]}
         actions={
           tab !== 'resumen' ? (
             <div className="flex items-center gap-2">

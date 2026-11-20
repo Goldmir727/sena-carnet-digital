@@ -37,7 +37,7 @@ export default function RegistrarAsistencia() {
         title="Registrar asistencia"
         description="Escanea el código QR que proyecta tu instructor para registrar tu asistencia a clase."
         icon={ScanLine}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Registrar asistencia' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Registrar asistencia' }]}
       />
 
       <Card>

@@ -1,5 +1,6 @@
 import Logo from './Logo';
 import { ShieldCheck, QrCode, BadgeCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const FEATURES = [
   {
@@ -36,7 +37,7 @@ export default function AuthLayout({ children, footer, sidebarFooter }) {
         <div className="absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-sena-yellow/20 blur-3xl" />
 
         <div className="relative z-10 flex items-center gap-3 text-white">
-          <Logo size="md" />
+          <Link to="/" aria-label="Volver a la presentación de CarnetiSENA"><Logo size="md" /></Link>
           <div>
             <p className="text-sm font-bold tracking-tight">Carnets SENA</p>
             <p className="text-xs text-sena-tint-200">Plataforma digital institucional</p>
@@ -44,9 +45,9 @@ export default function AuthLayout({ children, footer, sidebarFooter }) {
         </div>
 
         <div className="relative z-10">
-          <h1 className="max-w-md text-4xl font-bold leading-tight tracking-tight text-white">
+          <p className="max-w-md text-4xl font-bold leading-tight tracking-tight text-white">
             La identidad digital de la comunidad SENA.
-          </h1>
+          </p>
           <p className="mt-4 max-w-md text-base leading-relaxed text-sena-tint-200">
             Un solo lugar para gestionar usuarios, grupos, carnets digitales, asistencia y validación de accesos.
           </p>
@@ -80,7 +81,7 @@ export default function AuthLayout({ children, footer, sidebarFooter }) {
 
         <div className="relative z-10 w-full max-w-[26rem]">
           <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
-            <Logo size="md" />
+            <Link to="/" aria-label="Volver a la presentación de CarnetiSENA"><Logo size="md" /></Link>
             <div>
               <p className="text-base font-bold tracking-tight text-sena-ink">Carnets SENA</p>
               <p className="text-xs text-slate-500">Plataforma digital institucional</p>

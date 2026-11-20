@@ -100,7 +100,7 @@ export default function CompleteProfile({ user }) {
         title="Completa tu perfil"
         description="Necesitamos estos datos para generar tu carnet digital. Solo te tomará un minuto."
         icon={UserCheck}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Completar perfil' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Completar perfil' }]}
       />
 
       {faltantes.length > 0 && (

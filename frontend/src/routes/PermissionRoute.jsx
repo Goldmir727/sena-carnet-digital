@@ -6,7 +6,7 @@ export default function PermissionRoute({ permission, children }) {
   const { user } = useAuth();
 
   if (!hasPermission(user?.role_name, permission)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/panel" replace />;
   }
 
   return children;

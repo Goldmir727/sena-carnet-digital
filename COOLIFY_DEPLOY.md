@@ -481,3 +481,121 @@ credenciales incorrectas y el flujo 2FA para las correctas.
 El proxy `/api/` de `frontend/nginx.conf` se conserva como compatibilidad para
 el esquema de un solo dominio, pero con el subdominio dedicado el frontend ya
 no lo usa.
+
+## 15. SEO, páginas públicas e indexación
+
+### Rutas y contenido
+
+- `/`: presentación pública de CarnetiSENA.
+- `/guia`: ayuda pública de acceso, carnet y asistencia, sin datos personales.
+- `/login`: inicio de sesión, excluido de indexación.
+- `/panel`: panel autenticado (antes estaba en `/`). El acceso, el menú Inicio
+  y las migas de navegación ya apuntan a `/panel`.
+- Las demás rutas privadas conservan sus direcciones y sus permisos.
+
+`npm run build`, dentro de `frontend/`, ejecuta Vite y luego prerenderiza
+únicamente las dos páginas públicas. El resultado contiene:
+
+| Archivo de `dist/` | Uso |
+|---|---|
+| `index.html` | Presentación con contenido legible sin JavaScript |
+| `guia/index.html` | Guía pública prerenderizada |
+| `app.html` | Shell de las rutas privadas, vacío de datos y con `noindex` |
+| `404.html` | Página de error estática con `noindex` |
+| `robots.txt` | Permite rastrear y anuncia el sitemap |
+| `sitemap.xml` | Solo `https://carnetisena.com/` y `/guia` |
+
+Los metadatos se mantienen en `frontend/src/seo/site.mjs`: título,
+descripción, canonical individual, Open Graph, Twitter y datos `WebSite` de
+la portada. No se atribuye al proyecto el carácter de portal oficial del SENA.
+No se incluyen tokens, identificadores de carnets ni consultas de URL en los
+metadatos. El favicon `frontend/public/favicon-sena.png` es una copia derivada
+del logo existente, cuadrada de 96 px y con fondo blanco. Para regenerarlo,
+con Pillow instalado: `python scripts/generate-favicon.py` desde `frontend/`.
+
+### Despliegue y dominio preferido
+
+1. Reconstruye y despliega **web y api** desde `docker-compose.coolify.yml`.
+   No basta reiniciar contenedores anteriores. No requiere migraciones de BD
+   ni recompilar Flutter.
+2. Mantén `VITE_API_URL=https://api.carnetisena.com` en el build de `web`.
+   Las variables `VITE_*` locales pueden sobrescribir el valor por defecto;
+   no utilices un `.env` de desarrollo al publicar manualmente `dist/`.
+3. La URL preferida es `https://carnetisena.com`. Nginx redirige con `308`
+   desde `www` y desde HTTP cuando recibe esos hosts. Los redirects de rutas
+   son relativos para no degradar a HTTP detrás de Traefik.
+4. En Coolify, ambos nombres (`carnetisena.com` y `www.carnetisena.com`) deben
+   llegar a `web:80` y tener certificado TLS válido, incluso si `www` solo
+   redirige. Un fallo de TLS ocurre antes de que Nginx pueda redirigir.
+5. Si el proxy de Coolify intercepta HTTP con `307`, configura allí una
+   redirección **permanente (301 o 308)**. La redirección del contenedor no
+   sustituye la del proxy cuando este responde primero.
+
+Se comprobó el 20/11/2026 que la raíz HTTPS respondía `200`, HTTP redirigía
+con `307` y la petición a `https://www.carnetisena.com` fallaba por confianza
+del certificado desde este equipo. Esas comprobaciones son previas al nuevo
+despliegue y no certifican el estado posterior de producción.
+
+La configuración alternativa de `vercel.json` también utiliza `app.html`
+solo para las rutas privadas conocidas, sin un catch-all a la portada.
+El despliegue real en Vercel queda por verificar; el sitio observado usa Nginx.
+
+### Privacidad e indexación
+
+- Las páginas privadas tienen `noindex` tanto en el HTML inicial como en
+  `X-Robots-Tag`, y mantienen `noindex` al navegar sin recargar la página.
+- La API agrega `X-Robots-Tag: noindex, nofollow` a sus respuestas, incluidos
+  Swagger, OpenAPI, errores y rutas con el prefijo `/api`.
+- No se bloquean esas URL con `Disallow`, para que un buscador pueda leer
+  las instrucciones de no indexación si las había descubierto previamente.
+- `robots.txt` y `noindex` **no son controles de acceso**. La protección real
+  sigue siendo la autenticación y autorización existentes.
+- Las URL desconocidas devuelven un `404` real en Nginx, no la portada con `200`.
+
+### Verificación tras el despliegue
+
+```bash
+curl -I https://carnetisena.com/
+curl -I https://carnetisena.com/guia
+curl -I https://carnetisena.com/login
+curl -I https://carnetisena.com/no-existe
+curl -I https://api.carnetisena.com/docs
+curl https://carnetisena.com/sitemap.xml
+curl -I http://carnetisena.com/
+curl -I https://www.carnetisena.com/
+```
+
+Esperado: `200` para páginas públicas; `200` con `X-Robots-Tag: noindex` en
+login y docs; `404` para una URL inexistente; redirección permanente al dominio
+preferido desde las variantes. Comprobar además que `/panel` exige sesión.
+
+En Search Console, envía `https://carnetisena.com/sitemap.xml` e inspecciona
+la raíz y `/guia`. Solicita indexación una vez publicado y verificado el
+contenido. El título y el favicon de Google pueden tardar en actualizarse y
+Google puede seleccionar otros textos para sus resultados.
+
+### Pruebas locales
+
+```bash
+cd frontend
+npm run build
+npm run test:seo
+npm run lint
+npm run preview -- --host 127.0.0.1 --port 4173
+```
+
+Opcional, con Playwright para Python y Chrome instalados, en otra terminal
+desde `frontend/`: `python scripts/browser_seo_test.py`. Esta prueba intercepta
+la API para simular el acceso y el 2FA, no usa cuentas ni datos de producción.
+Comprueba las páginas sin JS, las rutas privadas y anchos 360/375/768 px.
+El build probado debe usar el dominio de API de producción indicado arriba.
+
+La portada y la guía obtuvieron localmente **100/100 en SEO, accesibilidad y
+buenas prácticas** con Lighthouse. Se verificaron también la configuración y
+las respuestas de Nginx con un servidor temporal. Son validaciones locales:
+no miden posiciones en Google ni los Core Web Vitals de usuarios reales.
+
+La portada carga la aplicación privada de forma diferida y no consulta la
+API. Los módulos de PDF/Excel siguen perteneciendo al panel; Vite advierte
+todavía del tamaño de algunos de esos chunks. Tras publicar, mide LCP, INP y
+CLS en PageSpeed Insights/Search Console antes de decidir más optimizaciones.

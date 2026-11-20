@@ -225,7 +225,7 @@ export default function MiCarnet() {
           title="Mi carnet"
           description="Consulta la información de tu carnet digital del SENA."
           icon={IdCard}
-          breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Mi carnet' }]}
+          breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Mi carnet' }]}
         />
         <EmptyState
           icon={IdCard}
@@ -243,7 +243,7 @@ export default function MiCarnet() {
           eyebrow="Identidad SENA"
           title="Mi carnet"
           icon={IdCard}
-          breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Mi carnet' }]}
+          breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Mi carnet' }]}
         />
         <ErrorState
           title="No se pudo consultar el carnet"
@@ -320,7 +320,7 @@ export default function MiCarnet() {
         title="Mi carnet"
         description="Tu carnet digital vigente. Presenta el código QR o el UUID para validar tu identidad en las instalaciones del SENA."
         icon={IdCard}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Mi carnet' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Mi carnet' }]}
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

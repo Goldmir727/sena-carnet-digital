@@ -29,7 +29,7 @@ export default function AppRouter() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<Dashboard />} />
+          <Route path="panel" element={<Dashboard />} />
 
           <Route
             path="mi-carnet"

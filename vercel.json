@@ -21,10 +21,46 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
+      "trailingSlash": false,
+      "redirects": [
+        {
+          "source": "/:path*",
+          "has": [{ "type": "host", "value": "www.carnetisena.com" }],
+          "destination": "https://carnetisena.com/:path*",
+          "permanent": true
+        },
+        {
+          "source": "/index.html",
+          "destination": "/",
+          "permanent": true
+        },
+        {
+          "source": "/guia/index.html",
+          "destination": "/guia",
+          "permanent": true
+        }
+      ],
+      "headers": [
+        {
+          "source": "/:page(login|forgot-password|reset-password|panel|mi-carnet|usuarios|grupos|centros|programas|carnets|asistencia|escanear-clase|qr-clase|reportes|validar|ayuda|app.html|404.html)",
+          "headers": [
+            { "key": "X-Robots-Tag", "value": "noindex, follow" },
+            { "key": "Cache-Control", "value": "no-store" }
+          ]
+        }
+      ],
       "rewrites": [
         {
-          "source": "/(.*)",
+          "source": "/",
           "destination": "/index.html"
+        },
+        {
+          "source": "/guia",
+          "destination": "/guia/index.html"
+        },
+        {
+          "source": "/:page(login|forgot-password|reset-password|panel|mi-carnet|usuarios|grupos|centros|programas|carnets|asistencia|escanear-clase|qr-clase|reportes|validar|ayuda)",
+          "destination": "/app.html"
         }
       ]
     }

@@ -101,7 +101,7 @@ export default function QrClase() {
           title="QR de clase"
           description="Genera el código QR intransferible que tus aprendices escanean para registrar asistencia."
           icon={QrCode}
-          breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'QR de clase' }]}
+          breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'QR de clase' }]}
         />
         <ErrorState title="No se pudieron cargar tus grupos" message={getErr(grupos.error)} onRetry={grupos.refetch} />
       </div>
@@ -116,7 +116,7 @@ export default function QrClase() {
           title="QR de clase"
           description="Genera el código QR intransferible que tus aprendices escanean para registrar su asistencia."
           icon={QrCode}
-          breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'QR de clase' }]}
+          breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'QR de clase' }]}
         />
 
         {data.length === 0 ? (
@@ -153,7 +153,7 @@ export default function QrClase() {
         title="QR de clase"
         description="Proyecta este código para que tus aprendices registren asistencia."
         icon={QrCode}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'QR de clase' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'QR de clase' }]}
         actions={
           <Button variant="secondary" icon={RefreshCw} onClick={onGenerar} loading={generar.isPending}>
             Regenerar QR

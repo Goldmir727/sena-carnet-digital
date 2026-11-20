@@ -163,7 +163,7 @@ export default function Centros() {
         title="Centros de formación"
         description="Gestiona los centros a los que se vinculan los grupos y aprendices."
         icon={Building2}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Centros' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Centros' }]}
         actions={
           <Button icon={Plus} onClick={openCreate}>
             Nuevo centro

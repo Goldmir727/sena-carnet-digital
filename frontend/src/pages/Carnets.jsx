@@ -224,7 +224,7 @@ export default function Carnets() {
         title="Gestión de carnets"
         description="Genera, regenera y controla el estado de los carnets digitales del SENA."
         icon={CreditCard}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Carnets' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Carnets' }]}
         actions={
           <Button icon={Plus} onClick={() => setGenerateOpen(true)}>
             Generar carnet

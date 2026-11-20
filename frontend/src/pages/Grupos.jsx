@@ -315,7 +315,7 @@ export default function Grupos() {
         title="Grupos"
         description="Organiza a aprendices y docentes en grupos para la gestión de asistencia."
         icon={Users}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Grupos' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Grupos' }]}
         actions={
           <div className="flex gap-2">
             <Button icon={Plus} onClick={openCreate}>

@@ -432,7 +432,7 @@ export default function Usuarios() {
         title="Usuarios"
         description="Gestiona las cuentas de aprendices, docentes y colaboradores del sistema."
         icon={Users}
-        breadcrumb={[{ label: 'Inicio', to: '/' }, { label: 'Usuarios' }]}
+        breadcrumb={[{ label: 'Inicio', to: '/panel' }, { label: 'Usuarios' }]}
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => { setImportResult(null); setImportFile(null); setImportPreview(null); setFichaEsperada(''); setImportOpen(true); }}>

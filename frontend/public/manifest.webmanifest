@@ -1,8 +1,8 @@
 {
-  "name": "Sistema de Carnets SENA",
-  "short_name": "Carnets SENA",
+  "name": "CarnetiSENA — Carnet digital y asistencia",
+  "short_name": "CarnetiSENA",
   "description": "Carnets digitales y control de asistencia SENA",
-  "start_url": "/",
+  "start_url": "/panel",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
