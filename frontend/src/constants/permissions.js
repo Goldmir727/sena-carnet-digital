@@ -27,7 +27,7 @@ export const ROLE_PERMISSIONS = {
   ],
   Aprendiz: ['dashboard.view', 'carnet.view', 'qr.carnet', 'asistencia.escanear'],
   Funcionario: ['dashboard.view', 'carnet.view', 'qr.carnet'],
-  Validador: ['dashboard.view', 'validar.qr'],
+  Validador: ['dashboard.view', 'carnet.view', 'validar.qr'],
 };
 
 export function hasPermission(roleName, permission) {

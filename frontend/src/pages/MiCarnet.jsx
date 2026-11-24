@@ -25,6 +25,7 @@ import toast from 'react-hot-toast';
 import { useMiCarnet } from '../api/carnets';
 import { useUser, useUpdateUser } from '../api/users';
 import { useAuth } from '../hooks/useAuth';
+import { hasPermission } from '../constants/permissions';
 import { useGenerarQrCarnet, fetchQrImageBlob } from '../api/qr';
 import { fetchCarnetQrUrl, downloadCarnetPdf } from '../lib/carnetMedia';
 import { buildCarnetData } from '../lib/carnetDesign';
@@ -77,6 +78,11 @@ export default function MiCarnet() {
   const { user: authUser } = useAuth();
   const profile = useUser(carnet?.user_id || authUser?.id);
   const user = profile.data;
+
+  // El QR de acceso temporal está prohibido para el Validador en el backend
+  // (RF-14). La acción se oculta sin otorgar permisos adicionales ni relajar
+  // la validación del servicio.
+  const puedeGenerarQrAcceso = hasPermission(authUser?.role_name, 'qr.carnet');
 
   // Onboarding: el Aprendiz con datos críticos faltantes completa
   // su perfil antes de ver el carnet (tipo de sangre + foto).
@@ -447,54 +453,56 @@ export default function MiCarnet() {
               </div>
             </div>
           </Card>
-          <Card className="overflow-hidden" padding={false}>
-            <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sena-tint-100 text-sena-green">
-                <Zap className="h-4 w-4" />
+          {puedeGenerarQrAcceso && (
+            <Card className="overflow-hidden" padding={false}>
+              <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sena-tint-100 text-sena-green">
+                  <Zap className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-sena-ink">QR de acceso temporal</h2>
+                  <p className="text-xs text-slate-400">Para validar en portería · un solo uso</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-sena-ink">QR de acceso temporal</h2>
-                <p className="text-xs text-slate-400">Para validar en portería · un solo uso</p>
-              </div>
-            </div>
-            <div className="flex flex-col items-center px-5 py-6">
-              {!accessQr ? (
-                <>
-                  <p className="mb-4 text-center text-sm text-slate-500">
-                    Genera un QR temporal de un solo uso para presentarlo ante el validador de acceso.
-                  </p>
-                  <Button fullWidth icon={Zap} onClick={onGenAccess} loading={generarAccess.isPending}>
-                    Generar QR de acceso
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="flex h-52 w-52 items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
-                    {accessUrl ? (
-                      <img src={accessUrl} alt="QR de acceso" className="h-full w-full object-contain" />
-                    ) : accessError ? (
-                      <p className="px-4 text-center text-sm text-slate-400">No se pudo cargar el QR.</p>
-                    ) : (
-                      <span className="flex h-8 w-8 animate-spin items-center justify-center rounded-full border-2 border-sena-tint-200 border-t-sena-green" />
-                    )}
-                  </div>
-                  <p className="mt-4 max-w-full truncate rounded-lg bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-500">
-                    {accessQr.qr_token}
-                  </p>
-                  <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${tiempoAcceso}`}>
-                    <Clock className="h-3.5 w-3.5" />
-                    Expira en {String(Math.floor(segundosRestantes / 60)).padStart(2, '0')}:
-                    {String(segundosRestantes % 60).padStart(2, '0')} · un solo uso
-                  </span>
-                  <div className="mt-5 w-full">
-                    <Button fullWidth variant="secondary" icon={RefreshCw} onClick={onGenAccess} loading={generarAccess.isPending}>
-                      Regenerar QR
+              <div className="flex flex-col items-center px-5 py-6">
+                {!accessQr ? (
+                  <>
+                    <p className="mb-4 text-center text-sm text-slate-500">
+                      Genera un QR temporal de un solo uso para presentarlo ante el validador de acceso.
+                    </p>
+                    <Button fullWidth icon={Zap} onClick={onGenAccess} loading={generarAccess.isPending}>
+                      Generar QR de acceso
                     </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </Card>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex h-52 w-52 items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
+                      {accessUrl ? (
+                        <img src={accessUrl} alt="QR de acceso" className="h-full w-full object-contain" />
+                      ) : accessError ? (
+                        <p className="px-4 text-center text-sm text-slate-400">No se pudo cargar el QR.</p>
+                      ) : (
+                        <span className="flex h-8 w-8 animate-spin items-center justify-center rounded-full border-2 border-sena-tint-200 border-t-sena-green" />
+                      )}
+                    </div>
+                    <p className="mt-4 max-w-full truncate rounded-lg bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-500">
+                      {accessQr.qr_token}
+                    </p>
+                    <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${tiempoAcceso}`}>
+                      <Clock className="h-3.5 w-3.5" />
+                      Expira en {String(Math.floor(segundosRestantes / 60)).padStart(2, '0')}:
+                      {String(segundosRestantes % 60).padStart(2, '0')} · un solo uso
+                    </span>
+                    <div className="mt-5 w-full">
+                      <Button fullWidth variant="secondary" icon={RefreshCw} onClick={onGenAccess} loading={generarAccess.isPending}>
+                        Regenerar QR
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
         </div>
       </div>
 
