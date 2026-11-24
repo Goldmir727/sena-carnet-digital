@@ -21,6 +21,8 @@ import Select from '../components/ui/Select';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import Dropdown from '../components/ui/Dropdown';
 import StatusBadge from '../components/ui/StatusBadge';
 import ErrorState from '../components/ui/ErrorState';
@@ -97,6 +99,7 @@ export default function Carnets() {
   }, [all]);
 
   const rows = filter ? all.filter((c) => c.estado === filter) : all;
+  const pag = usePagination(rows, filter);
 
   const usuariosSinCarnet = useMemo(
     () => (usersQuery.data || []).filter((u) => !all.some((c) => c.user_id === u.id)),
@@ -260,14 +263,17 @@ export default function Carnets() {
           onRetry={carnetsQuery.refetch}
         />
       ) : (
-        <Table
-          columns={columns}
-          rows={rows}
-          loading={carnetsQuery.isLoading}
-          emptyTitle="Sin carnets"
-          emptyMessage="Aún no hay carnets registrados. Genera el primero."
-          keyField="id"
-        />
+        <>
+          <Table
+            columns={columns}
+            rows={pag.pageRows}
+            loading={carnetsQuery.isLoading}
+            emptyTitle="Sin carnets"
+            emptyMessage="Aún no hay carnets registrados. Genera el primero."
+            keyField="id"
+          />
+          <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
+        </>
       )}
 
       <Modal

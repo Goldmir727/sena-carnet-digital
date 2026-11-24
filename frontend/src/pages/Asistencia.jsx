@@ -19,6 +19,8 @@ import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
 import ErrorState from '../components/ui/ErrorState';
@@ -57,6 +59,7 @@ function DocenteView() {
   const subir = useSubirExcel();
 
   const rows = listQuery.data || [];
+  const pag = usePagination(rows, `${grupoSeleccionado}|${fecha}`);
   const stats = statsQuery.data || {};
 
   const onSubir = async () => {
@@ -164,13 +167,14 @@ function DocenteView() {
       ) : (
         <Table
           columns={columns}
-          rows={rows}
+          rows={pag.pageRows}
           loading={listQuery.isLoading}
           emptyTitle="Sin asistencias registradas"
           emptyMessage="Cuando los aprendices escaneen tu QR de clase, aquí aparecerán los registros."
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
 
       <Card>
         <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
@@ -236,6 +240,7 @@ function CoordinadorView() {
   const rangeQuery = useAttendanceRange(rangeActive ? { desde, hasta } : null);
 
   const rows = rangeActive ? rangeQuery.data || [] : attendanceQuery.data || [];
+  const pag = usePagination(rows, `${desde}|${hasta}`);
   const loading = rangeActive ? rangeQuery.isLoading : attendanceQuery.isLoading;
   const isError = rangeActive ? rangeQuery.isError : attendanceQuery.isError;
   const error = rangeActive ? rangeQuery.error : attendanceQuery.error;
@@ -305,7 +310,7 @@ function CoordinadorView() {
       ) : (
         <Table
           columns={columns}
-          rows={rows}
+          rows={pag.pageRows}
           loading={loading}
           emptyTitle={rangeActive ? 'Sin registros en el rango' : 'Aún no hay asistencias'}
           emptyMessage={
@@ -316,6 +321,7 @@ function CoordinadorView() {
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
     </div>
   );
 }
@@ -357,6 +363,7 @@ function LlegadasTardeView() {
   const filtro = useFiltroFicha();
   const query = useLateArrivals(filtro.fichaId ? Number(filtro.fichaId) : undefined);
   const rows = query.data || [];
+  const pag = usePagination(rows, filtro.fichaId);
   const peor = rows.reduce((m, r) => Math.max(m, r.minutos_tarde || 0), 0);
   const promedio = rows.length
     ? Math.round(rows.reduce((acc, r) => acc + (r.minutos_tarde || 0), 0) / rows.length)
@@ -443,7 +450,7 @@ function LlegadasTardeView() {
       ) : (
         <Table
           columns={columns}
-          rows={rows}
+          rows={pag.pageRows}
           loading={query.isLoading}
           emptyTitle="Sin llegadas tarde"
           emptyMessage="Cuando un aprendiz registre su llegada después del inicio programado de una clase, aparecerá aquí."
@@ -451,6 +458,7 @@ function LlegadasTardeView() {
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
     </div>
   );
 }
@@ -459,6 +467,7 @@ function InasistenciasView() {
   const filtro = useFiltroFicha();
   const query = useAbsences(filtro.fichaId ? Number(filtro.fichaId) : undefined);
   const rows = query.data || [];
+  const pag = usePagination(rows, filtro.fichaId);
 
   const columns = [
     {
@@ -544,7 +553,7 @@ function InasistenciasView() {
       ) : (
         <Table
           columns={columns}
-          rows={rows}
+          rows={pag.pageRows}
           loading={query.isLoading}
           emptyTitle="Sin inasistencias"
           emptyMessage="No hay ausencias confirmadas en sesiones finalizadas de tus grupos."
@@ -552,6 +561,7 @@ function InasistenciasView() {
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
     </div>
   );
 }

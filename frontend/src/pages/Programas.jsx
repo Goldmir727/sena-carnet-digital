@@ -10,6 +10,8 @@ import Textarea from '../components/ui/Textarea';
 import Select from '../components/ui/Select';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import ErrorState from '../components/ui/ErrorState';
 import Dropdown from '../components/ui/Dropdown';
 
@@ -19,6 +21,7 @@ const MODALIDADES = ['presencial', 'virtual', 'mixta'];
 
 export default function Programas() {
   const programasQuery = useProgramas();
+  const pag = usePagination(programasQuery.data || []);
   const createPrograma = useCreatePrograma();
   const updatePrograma = useUpdatePrograma();
 
@@ -139,13 +142,14 @@ export default function Programas() {
       ) : (
         <Table
           columns={columns}
-          rows={programasQuery.data || []}
+          rows={pag.pageRows}
           loading={programasQuery.isLoading}
           emptyTitle="Sin programas"
           emptyMessage="Crea el primer programa de formación."
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
 
       <Modal
         open={open}

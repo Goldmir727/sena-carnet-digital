@@ -28,6 +28,8 @@ import Select from '../components/ui/Select';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import Dropdown from '../components/ui/Dropdown';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
@@ -132,6 +134,7 @@ export default function Usuarios() {
   const baseList = q.trim() ? searchQuery.data : usersQuery.data;
   const list = rolTab === 'Todos' ? baseList : (baseList || []).filter((u) => roleName(u) === rolTab);
   const displayRows = list || [];
+  const pag = usePagination(displayRows, `${debounced}|${estadoTab}|${rolTab}`);
 
   const activos = Array.isArray(allQueryForCards.data)
     ? allQueryForCards.data.filter((u) => u.is_active === 1 || u.is_active === true || ['ACTIVE', 'ACTIVO'].includes(u?.user_status)).length
@@ -312,9 +315,9 @@ export default function Usuarios() {
         <input
           type="checkbox"
           aria-label="Seleccionar todos los visibles"
-          checked={displayRows.length > 0 && displayRows.every((r) => sel.has(r.id))}
+          checked={pag.pageRows.length > 0 && pag.pageRows.every((r) => sel.has(r.id))}
           onChange={() => {
-            const ids = displayRows.map((r) => r.id);
+            const ids = pag.pageRows.map((r) => r.id);
             setSel((prev) => {
               const all = ids.every((id) => prev.has(id)) && ids.length > 0;
               const next = new Set(prev);
@@ -558,14 +561,22 @@ export default function Usuarios() {
             onRetry={usersQuery.refetch}
           />
         ) : (
-          <Table
-            columns={columns}
-            rows={displayRows}
-            loading={usersQuery.isLoading || searchQuery.isLoading}
-            emptyTitle="Sin usuarios"
-            emptyMessage="No hay usuarios que coincidan con tu búsqueda."
-            keyField="id"
-          />
+          <>
+            <Table
+              columns={columns}
+              rows={pag.pageRows}
+              loading={usersQuery.isLoading || searchQuery.isLoading}
+              emptyTitle="Sin usuarios"
+              emptyMessage="No hay usuarios que coincidan con tu búsqueda."
+              keyField="id"
+            />
+            <Pagination
+              page={pag.page}
+              totalPages={pag.totalPages}
+              total={pag.total}
+              onChange={pag.setPage}
+            />
+          </>
         )}
       </div>
 

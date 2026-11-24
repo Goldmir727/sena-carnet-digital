@@ -20,6 +20,8 @@ import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import StatusBadge from '../components/ui/StatusBadge';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
@@ -110,6 +112,7 @@ export default function Reportes() {
   };
 
   const active = tab === 'resumen' ? null : dataMap[tab];
+  const pag = usePagination(active?.query.data || [], `${tab}|${estadoFilter}`);
 
   return (
     <div className="space-y-6">
@@ -221,13 +224,14 @@ export default function Reportes() {
           ) : (
             <Table
               columns={active.columns}
-              rows={active.query.data || []}
+              rows={pag.pageRows}
               loading={active.query.isLoading}
               emptyTitle={active.empty}
               emptyMessage="Los datos aparecerán aquí a medida que se registren."
               keyField="id"
             />
           )}
+          <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
         </>
       )}
     </div>

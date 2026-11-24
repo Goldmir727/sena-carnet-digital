@@ -8,6 +8,8 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import ErrorState from '../components/ui/ErrorState';
 import Dropdown from '../components/ui/Dropdown';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -25,6 +27,7 @@ const EMPTY_FORM = {
 
 export default function Centros() {
   const centrosQuery = useCentros();
+  const pag = usePagination(centrosQuery.data || []);
   const createCentro = useCreateCentro();
   const updateCentro = useUpdateCentro();
 
@@ -184,13 +187,14 @@ export default function Centros() {
       ) : (
         <Table
           columns={columns}
-          rows={centrosQuery.data || []}
+          rows={pag.pageRows}
           loading={centrosQuery.isLoading}
           emptyTitle="Sin centros"
           emptyMessage="Crea el primer centro de formación para vincularlo a los grupos."
           keyField="id"
         />
       )}
+      <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
 
       <Modal
         open={open}

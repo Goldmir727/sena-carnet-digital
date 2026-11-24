@@ -23,6 +23,8 @@ import Textarea from '../components/ui/Textarea';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Table from '../components/ui/Table';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import Dropdown from '../components/ui/Dropdown';
 import Badge from '../components/ui/Badge';
 import ErrorState from '../components/ui/ErrorState';
@@ -33,6 +35,7 @@ const parserDate = (iso) =>
 
 export default function Grupos() {
   const gruposQuery = useGrupos();
+  const pag = usePagination(gruposQuery.data || []);
   const centrosQuery = useCentros();
   const programasQuery = useProgramas();
   const centrosById = Object.fromEntries((centrosQuery.data || []).map((c) => [c.id, c]));
@@ -332,14 +335,17 @@ export default function Grupos() {
           onRetry={gruposQuery.refetch}
         />
       ) : (
-        <Table
-          columns={columns}
-          rows={gruposQuery.data || []}
-          loading={gruposQuery.isLoading}
-          emptyTitle="Sin grupos"
-          emptyMessage="Crea el primer grupo para comenzar a organizar a los aprendices."
-          keyField="id"
-        />
+        <>
+          <Table
+            columns={columns}
+            rows={pag.pageRows}
+            loading={gruposQuery.isLoading}
+            emptyTitle="Sin grupos"
+            emptyMessage="Crea el primer grupo para comenzar a organizar a los aprendices."
+            keyField="id"
+          />
+          <Pagination page={pag.page} totalPages={pag.totalPages} total={pag.total} onChange={pag.setPage} />
+        </>
       )}
 
       <Modal

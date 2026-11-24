@@ -20,6 +20,7 @@ import { hasPermission } from '../constants/permissions';
 import { ROLE_BADGE_STYLES } from '../constants/roles';
 import { useReporteEstadisticas } from '../api/reports';
 import { useMiCarnet } from '../api/carnets';
+import { useUser } from '../api/users';
 import Zone from '../components/ui/Zone';
 import StatusBadge from '../components/ui/StatusBadge';
 import ErrorState from '../components/ui/ErrorState';
@@ -68,6 +69,13 @@ export default function Dashboard() {
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: statsRefetch } =
     useReporteEstadisticas({ enabled: canStats });
   const miCarnet = useMiCarnet();
+  const perfil = useUser(user?.id);
+
+  const nombre = perfil.data?.nombres || perfil.data?.name || '';
+  const apellido = perfil.data?.apellidos || perfil.data?.last_name || '';
+  const nombreCompleto = [nombre, apellido].filter(Boolean).join(' ').trim();
+  const nombreMostrado =
+    nombreCompleto || nombre || apellido || user?.username || 'usuario';
 
   const visible = SHORTCUTS.filter((s) => hasPermission(role, s.permission));
   const noCarnet = miCarnet.isError && miCarnet.error?.response?.status === 404;
@@ -95,7 +103,7 @@ export default function Dashboard() {
             Plataforma de identidad institucional
           </div>
           <h1 className="text-3xl font-extrabold leading-[1.1] tracking-tight text-white md:text-[2.6rem]">
-            Hola, {user?.username}.
+            Hola, {nombreMostrado}.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-sena-tint-200">
             Consulta tu credencial digital, administra usuarios y carnets, y valida accesos
